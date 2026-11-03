@@ -72,3 +72,11 @@ node -e "const b=require('crypto').randomBytes(20),a='ABCDEFGHIJKLMNOPQRSTUVWXYZ
 - 4 kiểm thử xác thực 2 bước: thiếu OTP, mã sai, mã đúng, dùng lại OTP: pass.
 - Kiểm tra hiển thị trang chủ và màn hình ADMIN đăng nhập bằng trình duyệt không tải dữ liệu thật: pass. Ảnh preview chỉ dùng dữ liệu giả.
 - Chưa thực hiện kiểm thử tải lớn hoặc kiểm thử xâm nhập độc lập; chưa kết nối thực tế với Bin của bạn trong các thử nghiệm này.
+
+
+## Tệp đính kèm và nhạc
+- ADMIN có thể đính kèm một tệp trong form đăng sản phẩm, link miễn phí hoặc thông báo; chọn tệp, thư viện ảnh hoặc camera trên thiết bị hỗ trợ.
+- Tệp tối đa 32 KB. Ảnh gốc tối đa 12 MB, được thu nhỏ thành JPEG trước khi gửi. Kho JSONBin không phải dịch vụ lưu tệp: từ chối bài đính kèm nếu bản ghi vượt 90.000 byte; dùng link lưu trữ ngoài cho tệp lớn.
+- Ảnh/tệp sản phẩm và thông báo công khai; không tải thông tin đăng nhập hoặc bí mật bàn giao vào đây. Tệp miễn phí yêu cầu đăng nhập.
+- Acc có đơn approved/sold ẩn khỏi cửa hàng, vẫn giữ trong quản trị và lịch sử để bảo toàn thông tin đơn.
+- YouTube được yêu cầu tự phát có tiếng và lặp video. Chính sách trình duyệt có thể yêu cầu tương tác: thử lại khi chạm/phím trước lần phát đầu tiên. Khi nhạc đã phát, nút tạm dừng của người dùng được tôn trọng.

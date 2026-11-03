@@ -45,6 +45,27 @@ test('price updates preserve orders, enforce admin access and persist across res
   const state=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:cookie}})).json();
   assert.equal(state.admin.accounts[0].price,75000);assert.equal(state.admin.orders[0].price_paid,50000);
   for(const path of ['/','/app.js','/styles.css']){const r=await fetch('http://127.0.0.1:'+port+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(r.headers.get('content-security-policy'),/frame-src https:\/\/www.youtube.com/)}
+  assert.equal((await post('/api/admin/order/approve',{id:'o'})).status,200);
+  const publicState=await (await fetch('http://127.0.0.1:'+port+'/api/state')).json();
+  assert.equal(publicState.accs.some(a=>a.id==='a'),false);
+  assert.equal(record.orders[0].price_paid,50000);
+  const attachment={name:'readme.txt',data:Buffer.from('download test').toString('base64')};
+  assert.equal((await post('/api/admin/notice/add',{title:'File',content:'Public',attachment})).status,200);
+  const note=record.notifs.at(-1);
+  const download=await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id);
+  assert.equal(download.status,200);assert.equal(await download.text(),'download test');
+  assert.match(download.headers.get('content-disposition'),/^attachment/);
+  assert.equal((await post('/api/admin/notice/add',{title:'Bad',content:'Bad',attachment:{name:'large',data:Buffer.alloc(32769).toString('base64')}})).status,400);
+  assert.equal((await post('/api/admin/notice/add',{title:'Bad',content:'Bad',attachment:{name:'invalid',data:'@@@'}})).status,400);
+  assert.equal((await post('/api/admin/free/add',{title:'Download',attachment})).status,200);
+  const free=record.freebies[0];
+  assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/free/'+free.id)).status,401);
+  const freeDownload=await fetch('http://127.0.0.1:'+port+'/api/attachment/free/'+free.id,{headers:{Cookie:cookie}});
+  assert.equal(await freeDownload.text(),'download test');
+  const freeInfo=await (await fetch('http://127.0.0.1:'+port+'/api/free/'+free.id,{headers:{Cookie:cookie}})).json();
+  assert.equal(freeInfo.url,'/api/attachment/free/'+free.id);
+  await stop();await start();
+  assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id)).status,200);
   await post('/api/logout',{});
   assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,401);
  }finally{await stop();await new Promise(r=>bin.close(r))}

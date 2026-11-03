@@ -67,20 +67,32 @@ function productAvailability(a,source=db){
  const order=source.orders.find(o=>String(o.acc_id)===String(a.id)&&['pending','approved','sold'].includes(o.status));
  if(!order)return 'available';return order.status==='pending'?'pending':'sold';
 }
+function attachmentInput(value){
+ if(value===undefined||value===null)return null;
+ if(!value||typeof value.name!=='string'||typeof value.data!=='string'||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))throw Error('Tệp không hợp lệ');
+ const bytes=Buffer.from(value.data,'base64');
+ if(!bytes.length||bytes.length>32768)throw Error('Tệp tối đa 32 KB; ảnh sẽ được thu nhỏ tự động');
+ let type='application/octet-stream';
+ if(bytes.subarray(0,3).equals(Buffer.from([255,216,255])))type='image/jpeg';
+ else if(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))type='image/png';
+ else if(bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP')type='image/webp';
+ return {name:clean(value.name,100).replace(/[^\p{L}\p{N}_. -]/gu,'_')||'download',type,data:bytes.toString('base64')};
+}
+const attachmentMeta=(item,kind)=>item.attachment?{name:item.attachment.name,type:item.attachment.type,url:'/api/attachment/'+kind+'/'+encodeURIComponent(item.id)}:null;
 const pubAcc=a=>{
  const price=accountPrice(a),discount=percent(a.discount??0),availability=productAvailability(a);
- return {id:a.id,title:a.title,info:a.info||'',price,discount:Number.isFinite(discount)?discount:0,
+ return {attachment:attachmentMeta(a,'account'),id:a.id,title:a.title,info:a.info||'',price,discount:Number.isFinite(discount)?discount:0,
   priceReady:price!==null&&price>0&&Number.isFinite(discount),availability,sold:availability!=='available',
   type:a.type==='vip'?'vip':'normal',created_at:a.created_at};
 };
-const pubFree=f=>({id:f.id,title:f.title,description:f.description||'',created_at:f.created_at});
-const pubNotice=n=>({id:n.id,title:n.title,content:n.content,at:n.at});
+const pubFree=f=>({attachment:attachmentMeta(f,'free'),id:f.id,title:f.title,description:f.description||'',created_at:f.created_at});
+const pubNotice=n=>({attachment:attachmentMeta(n,'notice'),id:n.id,title:n.title,content:n.content,at:n.at});
 const pubUser=u=>({username:u.username,balance:balanceOf(u),created_at:u.created_at||0,vip:!!u.vip});
 function profile(s){return s?.role==='admin'?{username:ADMIN_USER,role:'admin',balance:0}:s?.role==='user'?{...pubUser(db.users.find(u=>u.username===s.username)),role:'user'}:null;}
-function publicData(){return {accs:db.accs.map(pubAcc),freebies:db.freebies.map(pubFree),notifs:db.notifs.slice(-30).map(pubNotice).reverse(),top:db.users.map(u=>({username:u.username,count:db.orders.filter(o=>o.username===u.username&&o.status==='approved').length})).sort((a,b)=>b.count-a.count).slice(0,10)}};
-function privateData(s){if(!s)return {};if(s.role==='admin')return {admin:{users:db.users.map(pubUser),accounts:db.accs.map(a=>({...pubAcc(a),link:a.link||''})),freebies:db.freebies,orders:db.orders,messages:db.messages,wallet:db.wallet,discounts:db.discounts,logs:db.logs.slice(-100).reverse(),ratings:db.ratings,notifs:db.notifs}};
+function publicData(){return {accs:db.accs.filter(a=>productAvailability(a)!=='sold').map(pubAcc),freebies:db.freebies.map(pubFree),notifs:db.notifs.slice(-30).map(pubNotice).reverse(),top:db.users.map(u=>({username:u.username,count:db.orders.filter(o=>o.username===u.username&&o.status==='approved').length})).sort((a,b)=>b.count-a.count).slice(0,10)}};
+function privateData(s){if(!s)return {};if(s.role==='admin')return {admin:{users:db.users.map(pubUser),accounts:db.accs.map(a=>({...pubAcc(a),link:a.link||''})),freebies:db.freebies.map(f=>({...pubFree(f),url:f.url})),orders:db.orders,messages:db.messages,wallet:db.wallet,discounts:db.discounts,logs:db.logs.slice(-100).reverse(),ratings:db.ratings,notifs:db.notifs.map(pubNotice)}};
 const orders=db.orders.filter(o=>o.username===s.username).map(o=>({...o,delivery:o.status==='approved'?(validateUrl(db.accs.find(a=>String(a.id)===String(o.acc_id))?.link||'')||''):''}));return {mine:{orders,wallet:db.wallet.filter(w=>w.username===s.username).slice(-100).reverse(),messages:db.messages.filter(m=>m.username===s.username).slice(-150),ratings:db.ratings.filter(r=>r.username===s.username)}};}
-function bodyJSON(req){return new Promise((resolve,reject)=>{let text='';req.on('data',chunk=>{text+=chunk;if(text.length>65536){reject(new Error('Dữ liệu quá lớn'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(new Error('JSON không hợp lệ'))}});req.on('error',reject)});}
+function bodyJSON(req){return new Promise((resolve,reject)=>{let text='';req.on('data',chunk=>{text+=chunk;if(text.length>100000){reject(new Error('Dữ liệu quá lớn'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(new Error('JSON không hợp lệ'))}});req.on('error',reject)});}
 
 // Render Edge forwards real client IP. Do NOT trust browser-supplied XFF
 // on localhost/direct hosting; turn on only when behind Render's proxy.
@@ -154,6 +166,16 @@ function requireRole(res,s,role){if(!s){fail(res,401,'Bạn cần đăng nhập'
 async function route(req,res){const url=new URL(req.url,'http://localhost');const pathname=url.pathname;const method=req.method;
 if(pathname==='/api/health'&&method==='GET')return respond(res,200,{ok:true,storage:'JSONBin'});
 if(pathname.startsWith('/api/')&&isIpBanned(req))return banReply(res,bannedUntil(req));
+if(pathname.startsWith('/api/attachment/')&&method==='GET'){
+ const parts=pathname.split('/'),kind=parts[3],itemId=decodeURIComponent(parts[4]||'');
+ if(kind==='free'&&!requireRole(res,auth(req)))return;
+ const list=kind==='account'?db.accs:kind==='free'?db.freebies:kind==='notice'?db.notifs:[];
+ const item=list.find(x=>String(x.id)===itemId),file=item?.attachment;
+ if(!file)return fail(res,404,'Không tìm thấy tệp');
+ const bytes=Buffer.from(file.data,'base64');
+ res.writeHead(200,{...securityHeaders(),'Content-Type':file.type,'Content-Length':bytes.length,'Cache-Control':'no-store','Content-Disposition':(file.type.startsWith('image/')?'inline':'attachment')+"; filename*=UTF-8''"+encodeURIComponent(file.name)});
+ return res.end(bytes);
+}
 if(pathname==='/api/state'&&method==='GET'){const s=auth(req);return respond(res,200,{profile:profile(s),...publicData(),...privateData(s)});}
 if(!pathname.startsWith('/api/'))return staticFile(pathname,res);
 if(!['POST','GET'].includes(method))return fail(res,405,'Phương thức không hợp lệ');
@@ -184,7 +206,7 @@ if(pathname==='/api/logout'&&method==='POST'){
  return respond(res,200,{ok:true},{'Set-Cookie':cookieHeader('',req)});
 }
 if(pathname.startsWith('/api/free/')&&method==='GET'){
- if(!requireRole(res,s))return;const f=db.freebies.find(x=>String(x.id)===decodeURIComponent(pathname.slice(10)));if(!f)return fail(res,404,'Không tìm thấy link');return respond(res,200,{title:f.title,url:f.url});
+ if(!requireRole(res,s))return;const f=db.freebies.find(x=>String(x.id)===decodeURIComponent(pathname.slice(10)));if(!f)return fail(res,404,'Không tìm thấy link');return respond(res,200,{title:f.title,attachment:attachmentMeta(f,'free'),url:f.url||attachmentMeta(f,'free')?.url});
 }
 if(pathname==='/api/coupon/check'&&method==='POST'){
  if(!requireRole(res,s))return;const c=db.discounts.find(x=>x.code===clean(b.code,32).toUpperCase()&&x.qty>0);return c?respond(res,200,{percent:c.percent,valid:true}):fail(res,404,'Mã giảm giá không hợp lệ hoặc đã hết');
@@ -201,6 +223,10 @@ if(pathname==='/api/rating'&&method==='POST'){
 }
 if(pathname.startsWith('/api/admin/')&&method==='POST'){
  if(!requireRole(res,s,'admin'))return;const action=pathname.slice('/api/admin/'.length);
+ let attachment;
+ if(['account/add','free/add','notice/add'].includes(action)){
+  try{attachment=attachmentInput(b.attachment)}catch(e){return fail(res,400,e.message)}
+ }
  const result=await mutate(d=>{
  const findOrder=()=>d.orders.find(x=>String(x.id)===String(b.id));
  switch(action){
@@ -208,7 +234,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   const title=clean(b.title,100),info=clean(b.info,500),link=b.link?validateUrl(b.link):'';
   const price=amount(b.price),discount=percent(b.discount??0);
   if(!title||!Number.isFinite(price)||price<=0||!Number.isFinite(discount)||(b.link&&!link))return {error:'Nhập giá bán lớn hơn 0 đ, giảm 0–100%, và link hợp lệ'};
-  d.accs.unshift({id:id(),title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',created_at:now()});break;
+  d.accs.unshift({attachment,id:id(),title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',created_at:now()});break;
  }
  case 'account/price': {
   const a=d.accs.find(x=>String(x.id)===String(b.id));
@@ -232,25 +258,26 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   a.link=link;a.updated_at=now();break;
  }
  case 'account/delete':{if(d.orders.some(o=>String(o.acc_id)===String(b.id)&&['pending','approved','sold'].includes(o.status)))return {error:'Sản phẩm còn đơn hàng đang xử lý'};d.accs=d.accs.filter(x=>String(x.id)!==String(b.id));break;}
- case 'free/add':{const title=clean(b.title,100),url=validateUrl(b.url);if(!title||!url)return {error:'Nhập tên và link http/https hợp lệ'};d.freebies.unshift({id:id(),title,url,description:clean(b.description,300),created_at:now()});break;}
+ case 'free/add':{const title=clean(b.title,100),url=b.url?validateUrl(b.url):'';if(!title||(!url&&!attachment)||(b.url&&!url))return {error:'Nhập tên và link http/https hợp lệ'};d.freebies.unshift({attachment,id:id(),title,url,description:clean(b.description,300),created_at:now()});break;}
  case 'free/delete':d.freebies=d.freebies.filter(x=>String(x.id)!==String(b.id));break;
  case 'order/approve':{const o=findOrder();if(!o||o.status!=='pending')return {error:'Đơn không ở trạng thái chờ duyệt'};const acc=d.accs.find(x=>String(x.id)===String(o.acc_id));if(!validateUrl(acc?.link||''))return {error:'Hãy cập nhật link bàn giao hợp lệ trước khi duyệt đơn'};o.status='approved';o.reviewed_at=now();break;}
  case 'order/reject':{const o=findOrder();if(!o||o.status!=='pending')return {error:'Đơn không ở trạng thái chờ duyệt'};const u=d.users.find(x=>x.username===o.username);const paid=parseMoney(o.price_paid),bal=balanceOf(u);if(!u||paid===null||bal===null)return {error:'Không thể tính số tiền hoàn; liên hệ quản trị để kiểm tra dữ liệu'};o.status='rejected';o.reviewed_at=now();u.balance=bal+paid;d.wallet.push({id:id(),username:u.username,amount:paid,note:'Hoàn tiền đơn '+o.id,at:now()});break;}
  case 'wallet/credit':{const u=d.users.find(x=>x.username===clean(b.username,40));const x=amount(b.amount);const bal=balanceOf(u);if(!u||!Number.isFinite(x)||x===0||bal===null||bal+x>1000000000)return {error:'Khách hoặc số tiền/số dư không hợp lệ'};u.balance=bal+x;d.wallet.push({id:id(),username:u.username,amount:x,note:clean(b.note,150)||'ADMIN nạp tiền',at:now()});break;}
  case 'coupon/add':{const code=clean(b.code,32).toUpperCase(),p=Number(b.percent),q=Number(b.qty);if(!/^[A-Z0-9_-]{3,32}$/.test(code)||!Number.isInteger(p)||p<1||p>100||!Number.isSafeInteger(q)||q<1||q>100000)return {error:'Mã 3–32 ký tự, giảm 1–100%, số lượng từ 1'};if(d.discounts.some(x=>x.code===code))return {error:'Mã đã tồn tại'};d.discounts.push({id:id(),code,percent:p,qty:q,at:now()});break;}
  case 'coupon/delete':d.discounts=d.discounts.filter(x=>x.code!==String(b.code));break;
- case 'notice/add':{const title=clean(b.title,120),content=clean(b.content,1000);if(!title||!content)return {error:'Vui lòng nhập thông báo'};d.notifs.push({id:id(),title,content,at:now()});break;}
+ case 'notice/add':{const title=clean(b.title,120),content=clean(b.content,1000);if(!title||!content)return {error:'Vui lòng nhập thông báo'};d.notifs.push({attachment,id:id(),title,content,at:now()});break;}
  case 'notice/delete':d.notifs=d.notifs.filter(x=>String(x.id)!==String(b.id));break;
  case 'chat/reply':{const username=clean(b.username,40),text=clean(b.text,1500);if(!d.users.some(x=>x.username===username)||!text)return {error:'Tin nhắn hoặc khách không hợp lệ'};d.messages.push({id:id(),username,from:'admin',text,at:now()});break;}
  case 'vip/gift':{const u=d.users.find(x=>x.username===clean(b.username,40));if(!u)return {error:'Không tìm thấy khách'};u.vip=true;break;}
  default:return {error:'Chức năng không tồn tại'};
  }
+ if(attachment&&Buffer.byteLength(JSON.stringify(d))>90000)return {error:'Kho JSONBin đã gần đầy. Hãy dùng đường dẫn tệp bên ngoài hoặc xóa nội dung không cần thiết trước khi tải thêm.'};
  d.logs.push({id:id(),at:now(),action,by:ADMIN_USER});return {ok:true};
  });return result.error?fail(res,400,result.error):respond(res,200,result);
 }
 return fail(res,404,'API không tồn tại');}
 function staticFile(p,res){
- const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js'};
+ const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js','/music.js':'music.js'};
  const filename=files[p];
  if(!filename)return fail(res,404,'Không tìm thấy');
  let data;try{data=fs.readFileSync(path.join(ROOT,'public',filename));}catch{return fail(res,500,'Thiếu file giao diện');}
@@ -266,7 +293,7 @@ function securityHeaders(){
   'Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=()',
   'Cross-Origin-Opener-Policy':'same-origin',
   'Cross-Origin-Resource-Policy':'same-origin',
-  'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  'Content-Security-Policy':"default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
  };
  if(process.env.NODE_ENV==='production')h['Strict-Transport-Security']='max-age=31536000; includeSubDomains';
  return h;
