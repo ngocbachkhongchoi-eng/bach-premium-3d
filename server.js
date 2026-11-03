@@ -174,9 +174,9 @@ if(pathname==='/api/login'&&method==='POST'){
  if(!rateLimit(req,'login',20,15*60000))return fail(res,429,'Quá nhiều yêu cầu đăng nhập, thử lại sau');
  const username=clean(b.username,40),p=String(b.password||'');
  if(!username||p.length<1||p.length>128)return fail(res,400,'Thông tin đăng nhập không hợp lệ');
- const result=await evaluateLogin(req,username,p,b.admin===true,b.otp);
+ const result=await evaluateLogin(req,username,p,username===ADMIN_USER,b.otp);
  if(!result.ok)return result.banned?banReply(res,result.until):fail(res,401,'Sai tài khoản hoặc mật khẩu');
- return respond(res,200,{ok:true},{'Set-Cookie':cookieHeader(signedToken(result.username,result.role),req)});
+ return respond(res,200,{ok:true,role:result.role},{'Set-Cookie':cookieHeader(signedToken(result.username,result.role),req)});
 }
 if(pathname==='/api/logout'&&method==='POST'){
  const c=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('bp_session='));
@@ -209,6 +209,13 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   const price=amount(b.price),discount=percent(b.discount??0);
   if(!title||!Number.isFinite(price)||price<=0||!Number.isFinite(discount)||(b.link&&!link))return {error:'Nhập giá bán lớn hơn 0 đ, giảm 0–100%, và link hợp lệ'};
   d.accs.unshift({id:id(),title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',created_at:now()});break;
+ }
+ case 'account/price': {
+  const a=d.accs.find(x=>String(x.id)===String(b.id));
+  if(!a)return {error:'Không tìm thấy sản phẩm'};
+  const price=amount(b.price);
+  if(!Number.isFinite(price)||price<=0)return {error:'Giá phải là số nguyên từ 1 đến 1.000.000.000 đ'};
+  a.price=price;a.updated_at=now();break;
  }
  case 'account/update': {
   const a=d.accs.find(x=>String(x.id)===String(b.id));if(!a)return {error:'Không tìm thấy sản phẩm'};
