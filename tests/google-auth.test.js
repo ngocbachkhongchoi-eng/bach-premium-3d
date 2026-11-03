@@ -9,13 +9,17 @@ test('Google code flow binds state and PKCE; rejects tampering, expiry and unver
   calls++;
   if(url.includes('/token')){params=options.body;return {ok:true,json:async()=>({access_token:'test-token'})}}
   assert.equal(options.headers.Authorization,'Bearer test-token');
-  return {ok:true,json:async()=>({sub:'google-subject',email_verified:verified})};
+  return {ok:true,json:async()=>({sub:'google-subject',email:'person@gmail.com',name:'Test Person',email_verified:verified})};
  }});
  assert.equal(auth.enabled,true);
+ const renderAuth=createGoogleAuth({env:{...env,GOOGLE_REDIRECT_URI:'',RENDER_EXTERNAL_URL:'https://bach-premium-3d.onrender.com'},secret:'test'});
+ assert.equal(renderAuth.enabled,true);
+ assert.equal(new URL(renderAuth.begin().url).searchParams.get('redirect_uri'),'https://bach-premium-3d.onrender.com/api/auth/google/callback');
+ assert.equal(createGoogleAuth({env:{...env,GOOGLE_REDIRECT_URI:'http://untrusted.example/api/auth/google/callback'},secret:'test'}).enabled,false);
  const start=auth.begin(),location=new URL(start.url),query=new URLSearchParams({state:location.searchParams.get('state'),code:'code'});
  assert.match(start.cookie,/HttpOnly; SameSite=Lax/);assert.match(start.cookie,/Secure/);
  assert.equal(location.searchParams.get('code_challenge_method'),'S256');
- assert.deepEqual(await auth.finish(query,start.cookie),{sub:'google-subject'});
+ assert.deepEqual(await auth.finish(query,start.cookie),{sub:'google-subject',email:'person@gmail.com',name:'Test Person'});
  assert.equal(crypto.createHash('sha256').update(params.get('code_verifier')).digest('base64url'),location.searchParams.get('code_challenge'));
  const before=calls;
  await assert.rejects(auth.finish(new URLSearchParams({state:'attacker',code:'code'}),start.cookie));

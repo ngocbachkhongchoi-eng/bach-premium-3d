@@ -89,7 +89,7 @@ const pubAcc=a=>{
 };
 const pubFree=f=>({attachment:attachmentMeta(f,'free'),id:f.id,title:f.title,description:f.description||'',created_at:f.created_at});
 const pubNotice=n=>({attachment:attachmentMeta(n,'notice'),id:n.id,title:n.title,content:n.content,at:n.at});
-const pubUser=u=>({username:u.username,balance:balanceOf(u),created_at:u.created_at||0,vip:!!u.vip});
+const pubUser=u=>({username:u.username,displayName:u.displayName||u.username,email:u.googleEmail||null,balance:balanceOf(u),created_at:u.created_at||0,vip:!!u.vip});
 function profile(s){return s?.role==='admin'?{username:ADMIN_USER,role:'admin',balance:0}:s?.role==='user'?{...pubUser(db.users.find(u=>u.username===s.username)),role:'user'}:null;}
 function publicData(){return {googleEnabled:googleAuth.enabled,accs:db.accs.filter(a=>productAvailability(a)!=='sold').map(pubAcc),freebies:db.freebies.map(pubFree),notifs:db.notifs.slice(-30).map(pubNotice).reverse(),top:db.users.map(u=>({username:u.username,count:db.orders.filter(o=>o.username===u.username&&o.status==='approved').length})).sort((a,b)=>b.count-a.count).slice(0,10)}};
 function privateData(s){if(!s)return {};if(s.role==='admin')return {admin:{users:db.users.map(pubUser),accounts:db.accs.map(a=>({...pubAcc(a),link:a.link||'',credentials:deliveryVault.open(a.credentials)})),freebies:db.freebies.map(f=>({...pubFree(f),url:f.url})),orders:db.orders,messages:db.messages,wallet:db.wallet,discounts:db.discounts,logs:db.logs.slice(-100).reverse(),ratings:db.ratings,notifs:db.notifs.map(pubNotice)}};
@@ -182,6 +182,7 @@ if(pathname==='/api/auth/google/callback'&&method==='GET'){
     let username;do{username='gg_'+crypto.randomBytes(10).toString('hex')}while(username.toLowerCase()===ADMIN_USER.toLowerCase()||d.users.some(u=>u.username.toLowerCase()===username.toLowerCase()));
     user={username,googleSub:identity.sub,balance:0,created_at:now()};d.users.push(user);
    }
+   user.googleEmail=identity.email;user.displayName=identity.name;
    return {username:user.username};
   });
   res.writeHead(302,{...securityHeaders(),'Cache-Control':'no-store',Location:'/', 'Set-Cookie':[googleAuth.clearCookie(),cookieHeader(signedToken(result.username,'user'),req)]});
@@ -309,7 +310,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
 }
 return fail(res,404,'API không tồn tại');}
 function staticFile(p,res){
- const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js','/music.js':'music.js'};
+ const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js','/music.js':'music.js','/settings.js':'settings.js'};
  const filename=files[p];
  if(!filename)return fail(res,404,'Không tìm thấy');
  let data;try{data=fs.readFileSync(path.join(ROOT,'public',filename));}catch{return fail(res,500,'Thiếu file giao diện');}

@@ -88,3 +88,13 @@ Trong **Quản trị ADMIN → Đăng acc / Sản phẩm**, chọn ảnh/tệp �
 Thông tin bàn giao được mã hóa AES-256-GCM khi lưu JSONBin, dùng khóa dẫn xuất từ SESSION_SECRET. **Giữ bản sao SESSION_SECRET an toàn: thay/mất khóa này sẽ khiến thông tin acc đã mã hóa không giải mã được; cần quy trình chuyển khóa trước khi đổi.** Chỉ ADMIN và chủ đơn đã được duyệt được nhận thông tin giải mã.
 
 Cấu hình đăng nhập Google: xem [GOOGLE_LOGIN_SETUP.md](GOOGLE_LOGIN_SETUP.md).
+
+
+## Cài đặt cá nhân
+
+Nút ⚙ Cài đặt nằm ở góc trên bên phải, dùng được trước và sau đăng nhập:
+- 5 bảng màu: cực quang tím, đại dương xanh, hồng pha lê, cam hoàng hôn, trắng ngọc trai.
+- Âm lượng, tắt tiếng, tự phát nhạc (phụ thuộc chính sách trình duyệt). Tắt tự phát sẽ tạm dừng nhạc và được ghi nhớ ở lần mở tiếp theo.
+- Tiếng Việt/Anh cho điều hướng và các nút chính; nội dung do cửa hàng đăng giữ nguyên.
+- Cỡ chữ, giảm chuyển động, bố cục gọn, thông báo thao tác; có nút khôi phục mặc định.
+- Cài đặt lưu riêng trên trình duyệt, không thay đổi tài khoản hay dữ liệu mua hàng. Khi bộ nhớ trình duyệt bị chặn, hiển thị thông báo và vẫn áp dụng trong phiên hiện tại.

@@ -1,7 +1,9 @@
 'use strict';
 const crypto=require('node:crypto');
 function createGoogleAuth({env=process.env,secret,request=fetch,clock=Date.now}){
- const client=env.GOOGLE_CLIENT_ID,clientSecret=env.GOOGLE_CLIENT_SECRET,redirect=env.GOOGLE_REDIRECT_URI;
+ const client=env.GOOGLE_CLIENT_ID,clientSecret=env.GOOGLE_CLIENT_SECRET;
+ let redirect=env.GOOGLE_REDIRECT_URI;
+ if(!redirect&&env.RENDER_EXTERNAL_URL){try{redirect=new URL('/api/auth/google/callback',env.RENDER_EXTERNAL_URL).href}catch{}}
  let valid=false;
  try{const u=new URL(redirect);valid=u.protocol==='https:'&&!u.username&&!u.password&&u.pathname==='/api/auth/google/callback'&&!u.search&&!u.hash}catch{}
  const enabled=Boolean(client&&clientSecret&&valid);
@@ -30,7 +32,8 @@ function createGoogleAuth({env=process.env,secret,request=fetch,clock=Date.now})
   if(!response.ok)throw Error('Google identity unavailable');
   const user=await response.json();
   if(typeof user.sub!=='string'||!user.sub||user.sub.length>255||user.email_verified!==true)throw Error('Unverified Google identity');
-  return {sub:user.sub};
+  if(typeof user.email!=='string'||user.email.length>254||!user.email.includes('@'))throw Error('Missing verified email');
+  return {sub:user.sub,email:user.email,name:typeof user.name==='string'?user.name.slice(0,100):user.email.split('@')[0]};
  }
  return {enabled,begin,finish,clearCookie:()=>cookie('',0)};
 }
