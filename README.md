@@ -80,3 +80,11 @@ node -e "const b=require('crypto').randomBytes(20),a='ABCDEFGHIJKLMNOPQRSTUVWXYZ
 - Ảnh/tệp sản phẩm và thông báo công khai; không tải thông tin đăng nhập hoặc bí mật bàn giao vào đây. Tệp miễn phí yêu cầu đăng nhập.
 - Acc có đơn approved/sold ẩn khỏi cửa hàng, vẫn giữ trong quản trị và lịch sử để bảo toàn thông tin đơn.
 - YouTube được yêu cầu tự phát có tiếng và lặp video. Chính sách trình duyệt có thể yêu cầu tương tác: thử lại khi chạm/phím trước lần phát đầu tiên. Khi nhạc đã phát, nút tạm dừng của người dùng được tôn trọng.
+
+## Đăng acc và đăng nhập Google
+
+Trong **Quản trị ADMIN → Đăng acc / Sản phẩm**, chọn ảnh/tệp ở đầu form rồi nhập tên, mô tả, tài khoản acc, mật khẩu và giá. Ảnh/tệp là nội dung công khai; thông tin tài khoản và mật khẩu nằm ở khung bàn giao riêng. Có thể chỉ dùng link bàn giao nếu sản phẩm không có tài khoản/mật khẩu.
+
+Thông tin bàn giao được mã hóa AES-256-GCM khi lưu JSONBin, dùng khóa dẫn xuất từ SESSION_SECRET. **Giữ bản sao SESSION_SECRET an toàn: thay/mất khóa này sẽ khiến thông tin acc đã mã hóa không giải mã được; cần quy trình chuyển khóa trước khi đổi.** Chỉ ADMIN và chủ đơn đã được duyệt được nhận thông tin giải mã.
+
+Cấu hình đăng nhập Google: xem [GOOGLE_LOGIN_SETUP.md](GOOGLE_LOGIN_SETUP.md).

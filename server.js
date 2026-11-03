@@ -11,6 +11,8 @@ function loadEnv(){ const file=path.join(ROOT,'.env');if(!fs.existsSync(file))re
 loadEnv();
 const PORT=Number(process.env.PORT||3000);
 const SECRET=process.env.SESSION_SECRET||'';
+const deliveryVault=require('./delivery')(SECRET);
+const googleAuth=require('./google-auth').createGoogleAuth({secret:SECRET});
 const ADMIN_USER=(process.env.ADMIN_USER||'').trim();
 const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD||'';
 const BIN=process.env.JSONBIN_BIN_ID||'';
@@ -89,9 +91,9 @@ const pubFree=f=>({attachment:attachmentMeta(f,'free'),id:f.id,title:f.title,des
 const pubNotice=n=>({attachment:attachmentMeta(n,'notice'),id:n.id,title:n.title,content:n.content,at:n.at});
 const pubUser=u=>({username:u.username,balance:balanceOf(u),created_at:u.created_at||0,vip:!!u.vip});
 function profile(s){return s?.role==='admin'?{username:ADMIN_USER,role:'admin',balance:0}:s?.role==='user'?{...pubUser(db.users.find(u=>u.username===s.username)),role:'user'}:null;}
-function publicData(){return {accs:db.accs.filter(a=>productAvailability(a)!=='sold').map(pubAcc),freebies:db.freebies.map(pubFree),notifs:db.notifs.slice(-30).map(pubNotice).reverse(),top:db.users.map(u=>({username:u.username,count:db.orders.filter(o=>o.username===u.username&&o.status==='approved').length})).sort((a,b)=>b.count-a.count).slice(0,10)}};
-function privateData(s){if(!s)return {};if(s.role==='admin')return {admin:{users:db.users.map(pubUser),accounts:db.accs.map(a=>({...pubAcc(a),link:a.link||''})),freebies:db.freebies.map(f=>({...pubFree(f),url:f.url})),orders:db.orders,messages:db.messages,wallet:db.wallet,discounts:db.discounts,logs:db.logs.slice(-100).reverse(),ratings:db.ratings,notifs:db.notifs.map(pubNotice)}};
-const orders=db.orders.filter(o=>o.username===s.username).map(o=>({...o,delivery:o.status==='approved'?(validateUrl(db.accs.find(a=>String(a.id)===String(o.acc_id))?.link||'')||''):''}));return {mine:{orders,wallet:db.wallet.filter(w=>w.username===s.username).slice(-100).reverse(),messages:db.messages.filter(m=>m.username===s.username).slice(-150),ratings:db.ratings.filter(r=>r.username===s.username)}};}
+function publicData(){return {googleEnabled:googleAuth.enabled,accs:db.accs.filter(a=>productAvailability(a)!=='sold').map(pubAcc),freebies:db.freebies.map(pubFree),notifs:db.notifs.slice(-30).map(pubNotice).reverse(),top:db.users.map(u=>({username:u.username,count:db.orders.filter(o=>o.username===u.username&&o.status==='approved').length})).sort((a,b)=>b.count-a.count).slice(0,10)}};
+function privateData(s){if(!s)return {};if(s.role==='admin')return {admin:{users:db.users.map(pubUser),accounts:db.accs.map(a=>({...pubAcc(a),link:a.link||'',credentials:deliveryVault.open(a.credentials)})),freebies:db.freebies.map(f=>({...pubFree(f),url:f.url})),orders:db.orders,messages:db.messages,wallet:db.wallet,discounts:db.discounts,logs:db.logs.slice(-100).reverse(),ratings:db.ratings,notifs:db.notifs.map(pubNotice)}};
+const orders=db.orders.filter(o=>o.username===s.username).map(o=>({...o,credentials:o.status==='approved'?deliveryVault.open(db.accs.find(a=>String(a.id)===String(o.acc_id))?.credentials):null,delivery:o.status==='approved'?(validateUrl(db.accs.find(a=>String(a.id)===String(o.acc_id))?.link||'')||''):''}));return {mine:{orders,wallet:db.wallet.filter(w=>w.username===s.username).slice(-100).reverse(),messages:db.messages.filter(m=>m.username===s.username).slice(-150),ratings:db.ratings.filter(r=>r.username===s.username)}};}
 function bodyJSON(req){return new Promise((resolve,reject)=>{let text='';req.on('data',chunk=>{text+=chunk;if(text.length>100000){reject(new Error('Dữ liệu quá lớn'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(new Error('JSON không hợp lệ'))}});req.on('error',reject)});}
 
 // Render Edge forwards real client IP. Do NOT trust browser-supplied XFF
@@ -166,6 +168,28 @@ function requireRole(res,s,role){if(!s){fail(res,401,'Bạn cần đăng nhập'
 async function route(req,res){const url=new URL(req.url,'http://localhost');const pathname=url.pathname;const method=req.method;
 if(pathname==='/api/health'&&method==='GET')return respond(res,200,{ok:true,storage:'JSONBin'});
 if(pathname.startsWith('/api/')&&isIpBanned(req))return banReply(res,bannedUntil(req));
+if(pathname==='/api/auth/google'&&method==='GET'){
+ if(!googleAuth.enabled)return fail(res,503,'Đăng nhập Google chưa được cấu hình');
+ if(!rateLimit(req,'google-login',20,15*60000))return fail(res,429,'Thử lại sau');
+ const flow=googleAuth.begin();res.writeHead(302,{...securityHeaders(),'Cache-Control':'no-store',Location:flow.url,'Set-Cookie':flow.cookie});return res.end();
+}
+if(pathname==='/api/auth/google/callback'&&method==='GET'){
+ try{
+  const identity=await googleAuth.finish(url.searchParams,req.headers.cookie);
+  const result=await mutate(d=>{
+   let user=d.users.find(u=>u.googleSub===identity.sub);
+   if(!user){
+    let username;do{username='gg_'+crypto.randomBytes(10).toString('hex')}while(username.toLowerCase()===ADMIN_USER.toLowerCase()||d.users.some(u=>u.username.toLowerCase()===username.toLowerCase()));
+    user={username,googleSub:identity.sub,balance:0,created_at:now()};d.users.push(user);
+   }
+   return {username:user.username};
+  });
+  res.writeHead(302,{...securityHeaders(),'Cache-Control':'no-store',Location:'/', 'Set-Cookie':[googleAuth.clearCookie(),cookieHeader(signedToken(result.username,'user'),req)]});
+ }catch{
+  res.writeHead(302,{...securityHeaders(),'Cache-Control':'no-store',Location:'/?login_error=google','Set-Cookie':googleAuth.clearCookie()});
+ }
+ return res.end();
+}
 if(pathname.startsWith('/api/attachment/')&&method==='GET'){
  const parts=pathname.split('/'),kind=parts[3],itemId=decodeURIComponent(parts[4]||'');
  if(kind==='free'&&!requireRole(res,auth(req)))return;
@@ -223,7 +247,13 @@ if(pathname==='/api/rating'&&method==='POST'){
 }
 if(pathname.startsWith('/api/admin/')&&method==='POST'){
  if(!requireRole(res,s,'admin'))return;const action=pathname.slice('/api/admin/'.length);
- let attachment;
+ let attachment,credentials;
+ if(['account/add','account/update','account/delivery'].includes(action)&&('accountUsername' in b||'accountPassword' in b)){
+  const username=typeof b.accountUsername==='string'?b.accountUsername.trim():'';
+  const password=typeof b.accountPassword==='string'?b.accountPassword:'';
+  if(username.length>200||password.length>500||Boolean(username)!==Boolean(password))return fail(res,400,'Nhập đủ tài khoản và mật khẩu acc (hoặc để trống cả hai)');
+  credentials=username?deliveryVault.seal({username,password}):null;
+ }
  if(['account/add','free/add','notice/add'].includes(action)){
   try{attachment=attachmentInput(b.attachment)}catch(e){return fail(res,400,e.message)}
  }
@@ -234,7 +264,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   const title=clean(b.title,100),info=clean(b.info,500),link=b.link?validateUrl(b.link):'';
   const price=amount(b.price),discount=percent(b.discount??0);
   if(!title||!Number.isFinite(price)||price<=0||!Number.isFinite(discount)||(b.link&&!link))return {error:'Nhập giá bán lớn hơn 0 đ, giảm 0–100%, và link hợp lệ'};
-  d.accs.unshift({attachment,id:id(),title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',created_at:now()});break;
+  d.accs.unshift({credentials:credentials||null,attachment,id:id(),title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',created_at:now()});break;
  }
  case 'account/price': {
   const a=d.accs.find(x=>String(x.id)===String(b.id));
@@ -249,18 +279,20 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   const price=amount(b.price),discount=percent(b.discount??0);
   if(!title||!Number.isFinite(price)||price<=0||!Number.isFinite(discount)||(b.link&&!link))return {error:'Vui lòng nhập giá bán lớn hơn 0 đ và thông tin hợp lệ'};
   if(d.orders.some(o=>String(o.acc_id)===String(a.id)&&['pending','approved','sold'].includes(o.status)))return {error:'Sản phẩm có đơn chờ duyệt/đã bán; không thể sửa giá hoặc thông tin bàn giao'};
+  if(credentials!==undefined)a.credentials=credentials;
   Object.assign(a,{title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',updated_at:now()});break;
  }
  case 'account/delivery':{
   const a=d.accs.find(x=>String(x.id)===String(b.id));if(!a)return {error:'Không tìm thấy sản phẩm'};
   if(productAvailability(a,d)!=='pending')return {error:'Chỉ cập nhật link cho sản phẩm đang chờ duyệt'};
-  const link=validateUrl(b.link);if(!link)return {error:'Vui lòng nhập link bàn giao hợp lệ (https://...)'};
+  const link=b.link?validateUrl(b.link):'';if((b.link&&!link)||(!link&&!(credentials===undefined?a.credentials:credentials)))return {error:'Nhập link hoặc tài khoản và mật khẩu để bàn giao'};
+  if(credentials!==undefined)a.credentials=credentials;
   a.link=link;a.updated_at=now();break;
  }
  case 'account/delete':{if(d.orders.some(o=>String(o.acc_id)===String(b.id)&&['pending','approved','sold'].includes(o.status)))return {error:'Sản phẩm còn đơn hàng đang xử lý'};d.accs=d.accs.filter(x=>String(x.id)!==String(b.id));break;}
  case 'free/add':{const title=clean(b.title,100),url=b.url?validateUrl(b.url):'';if(!title||(!url&&!attachment)||(b.url&&!url))return {error:'Nhập tên và link http/https hợp lệ'};d.freebies.unshift({attachment,id:id(),title,url,description:clean(b.description,300),created_at:now()});break;}
  case 'free/delete':d.freebies=d.freebies.filter(x=>String(x.id)!==String(b.id));break;
- case 'order/approve':{const o=findOrder();if(!o||o.status!=='pending')return {error:'Đơn không ở trạng thái chờ duyệt'};const acc=d.accs.find(x=>String(x.id)===String(o.acc_id));if(!validateUrl(acc?.link||''))return {error:'Hãy cập nhật link bàn giao hợp lệ trước khi duyệt đơn'};o.status='approved';o.reviewed_at=now();break;}
+ case 'order/approve':{const o=findOrder();if(!o||o.status!=='pending')return {error:'Đơn không ở trạng thái chờ duyệt'};const acc=d.accs.find(x=>String(x.id)===String(o.acc_id));if(!validateUrl(acc?.link||'')&&!acc?.credentials)return {error:'Hãy cập nhật link hoặc tài khoản, mật khẩu trước khi duyệt đơn'};o.status='approved';o.reviewed_at=now();break;}
  case 'order/reject':{const o=findOrder();if(!o||o.status!=='pending')return {error:'Đơn không ở trạng thái chờ duyệt'};const u=d.users.find(x=>x.username===o.username);const paid=parseMoney(o.price_paid),bal=balanceOf(u);if(!u||paid===null||bal===null)return {error:'Không thể tính số tiền hoàn; liên hệ quản trị để kiểm tra dữ liệu'};o.status='rejected';o.reviewed_at=now();u.balance=bal+paid;d.wallet.push({id:id(),username:u.username,amount:paid,note:'Hoàn tiền đơn '+o.id,at:now()});break;}
  case 'wallet/credit':{const u=d.users.find(x=>x.username===clean(b.username,40));const x=amount(b.amount);const bal=balanceOf(u);if(!u||!Number.isFinite(x)||x===0||bal===null||bal+x>1000000000)return {error:'Khách hoặc số tiền/số dư không hợp lệ'};u.balance=bal+x;d.wallet.push({id:id(),username:u.username,amount:x,note:clean(b.note,150)||'ADMIN nạp tiền',at:now()});break;}
  case 'coupon/add':{const code=clean(b.code,32).toUpperCase(),p=Number(b.percent),q=Number(b.qty);if(!/^[A-Z0-9_-]{3,32}$/.test(code)||!Number.isInteger(p)||p<1||p>100||!Number.isSafeInteger(q)||q<1||q>100000)return {error:'Mã 3–32 ký tự, giảm 1–100%, số lượng từ 1'};if(d.discounts.some(x=>x.code===code))return {error:'Mã đã tồn tại'};d.discounts.push({id:id(),code,percent:p,qty:q,at:now()});break;}
