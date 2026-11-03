@@ -266,7 +266,7 @@ function securityHeaders(){
   'Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=()',
   'Cross-Origin-Opener-Policy':'same-origin',
   'Cross-Origin-Resource-Policy':'same-origin',
-  'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
  };
  if(process.env.NODE_ENV==='production')h['Strict-Transport-Security']='max-age=31536000; includeSubDomains';
  return h;

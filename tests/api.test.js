@@ -44,7 +44,7 @@ test('price updates preserve orders, enforce admin access and persist across res
   await stop();await start();
   const state=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:cookie}})).json();
   assert.equal(state.admin.accounts[0].price,75000);assert.equal(state.admin.orders[0].price_paid,50000);
-  for(const path of ['/','/app.js','/styles.css']){const r=await fetch('http://127.0.0.1:'+port+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/)}
+  for(const path of ['/','/app.js','/styles.css']){const r=await fetch('http://127.0.0.1:'+port+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(r.headers.get('content-security-policy'),/frame-src https:\/\/www.youtube.com/)}
   await post('/api/logout',{});
   assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,401);
  }finally{await stop();await new Promise(r=>bin.close(r))}
