@@ -22,6 +22,14 @@ const assert=require('node:assert/strict');
   await page.locator('[name=theme]').selectOption(theme);
   assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
  }
+ for(const name of ['hero','ranking','images','descriptions','shadows','sticky']){
+  await page.locator('[name='+name+']').uncheck();
+  assert.equal(await page.locator('html').getAttribute('data-'+name),'false');
+ }
+ for(const name of ['wide','contrast']){
+  await page.locator('[name='+name+']').check();
+  assert.equal(await page.locator('html').getAttribute('data-'+name),'true');
+ }
  await page.locator('[name=theme]').selectOption('light');
  await page.locator('[name=volume]').fill('22');
  await page.locator('[name=muted]').check();

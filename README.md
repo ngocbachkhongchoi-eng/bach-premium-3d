@@ -98,3 +98,10 @@ Nút ⚙ Cài đặt nằm ở góc trên bên phải, dùng được trước v
 - Tiếng Việt/Anh cho điều hướng và các nút chính; nội dung do cửa hàng đăng giữ nguyên.
 - Cỡ chữ, giảm chuyển động, bố cục gọn, thông báo thao tác; có nút khôi phục mặc định.
 - Cài đặt lưu riêng trên trình duyệt, không thay đổi tài khoản hay dữ liệu mua hàng. Khi bộ nhớ trình duyệt bị chặn, hiển thị thông báo và vẫn áp dụng trong phiên hiện tại.
+
+
+## Bảng xếp hạng và hoạt động Render
+- Top 10 tính tổng nạp tiền trong lịch sử ví, chỉ lấy tổng dương; không dựa trên số đơn hoặc số dư hiện tại.
+- Giao dịch mới có loại deposit/refund. Dữ liệu cũ: khoản dương được tính là nạp trừ ghi chú hoàn tiền do ứng dụng tạo (bắt đầu bằng “Hoàn tiền đơn ”). Nếu dữ liệu được nhập thủ công từ nguồn khác, cần xác minh loại giao dịch trước khi tin bảng xếp hạng.
+- Render Free vẫn ngủ khi không có lưu lượng. Không có tác vụ tự ping hay cam kết chống ngủ trong mã. Để chạy liên tục, chủ dịch vụ chọn instance trả phí tại Render → service → Settings/Compute → Instance Type; thao tác này phát sinh phí. Cấu hình hiện vẫn là free.
+- Cài đặt bổ sung: hiện/ẩn giới thiệu, bảng xếp hạng, ảnh và mô tả; bóng đổ, thanh đầu trang cố định, bố cục rộng và tương phản.
