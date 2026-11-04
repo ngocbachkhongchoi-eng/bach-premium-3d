@@ -5,10 +5,11 @@ const assert=require('node:assert/strict');
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||undefined,headless:true,args:['--no-sandbox']});
  try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const messages=[];const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('http://bach.test/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path==='/api/state')return route.fulfill({json:{accs:[],freebies:[],top:[],notifs:[],googleEnabled:false,profile:{role:'user',username:'gg_random',email:'myname@gmail.com',balance:0}}});
+  if(path==='/api/chat'){messages.push({from:'user',text:route.request().postDataJSON().text,at:Date.now()});return route.fulfill({json:{ok:true}})}
+  if(path==='/api/state')return route.fulfill({json:{mine:{messages},accs:[],freebies:[],top:[],notifs:[],googleEnabled:false,profile:{role:'user',username:'gg_random',email:'myname@gmail.com',balance:0}}});
   return route.fulfill({body:fs.readFileSync(require('node:path').join(__dirname,'..','public',path==='/'?'index.html':path.slice(1))),contentType:path.endsWith('.js')?'application/javascript':path.endsWith('.css')?'text/css':'text/html'});
  });
  await page.route('https://www.youtube.com/**',route=>route.fulfill({contentType:'text/html',body:'<html>Music preview</html>'}));
@@ -16,13 +17,19 @@ const assert=require('node:assert/strict');
  await page.goto('http://bach.test/');
  await page.locator('#who').filter({hasText:'myname@gmail.com'}).waitFor();
  assert.ok(!(await page.locator('#who').textContent()).includes('gg_random'));
+ await page.locator('.support-launcher').click();
+ await page.locator('#supportText').fill('Xin hỗ trợ đơn hàng');
+ await page.locator('.support-form [type=submit]').click();
+ await page.locator('.support-messages').getByText('Xin hỗ trợ đơn hàng',{exact:false}).waitFor();
+ assert.equal(messages.at(-1).text,'Xin hỗ trợ đơn hàng');
+ await page.locator('[data-support-close]').click();
  await page.locator('#openSettings').click();
  await page.locator('#settingsDialog[open]').waitFor();
  for(const theme of ['ocean','rose','sunset','light','aurora']){
   await page.locator('[name=theme]').selectOption(theme);
   assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
  }
- for(const name of ['hero','ranking','images','descriptions','shadows','sticky']){
+ for(const name of ['hero','ranking','images','descriptions','shadows','sticky','tilt','spotlight','glass','rounded','borders','stats']){
   await page.locator('[name='+name+']').uncheck();
   assert.equal(await page.locator('html').getAttribute('data-'+name),'false');
  }

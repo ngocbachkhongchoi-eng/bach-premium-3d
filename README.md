@@ -105,3 +105,9 @@ Nút ⚙ Cài đặt nằm ở góc trên bên phải, dùng được trước v
 - Giao dịch mới có loại deposit/refund. Dữ liệu cũ: khoản dương được tính là nạp trừ ghi chú hoàn tiền do ứng dụng tạo (bắt đầu bằng “Hoàn tiền đơn ”). Nếu dữ liệu được nhập thủ công từ nguồn khác, cần xác minh loại giao dịch trước khi tin bảng xếp hạng.
 - Render Free vẫn ngủ khi không có lưu lượng. Không có tác vụ tự ping hay cam kết chống ngủ trong mã. Để chạy liên tục, chủ dịch vụ chọn instance trả phí tại Render → service → Settings/Compute → Instance Type; thao tác này phát sinh phí. Cấu hình hiện vẫn là free.
 - Cài đặt bổ sung: hiện/ẩn giới thiệu, bảng xếp hạng, ảnh và mô tả; bóng đổ, thanh đầu trang cố định, bố cục rộng và tương phản.
+
+## Chat nổi và hiệu ứng
+- Nút “Chat với ADMIN” cố định góc dưới phải. Khách cần đăng nhập; dùng cùng API/lịch sử hỗ trợ hiện có. ADMIN được dẫn tới hộp thư quản trị.
+- Khung chat cập nhật mỗi 15 giây khi đang mở và tab hiển thị; đóng khung thì dừng cập nhật. Không hiển thị giả trạng thái ADMIN online.
+- Cài đặt thêm 10 lựa chọn: nút chat nổi, nghiêng theo con trỏ, ánh sáng nền, kính, bo góc, viền, chữ chuyển sắc, thống kê cửa hàng, gạch chân link, viền bàn phím.
+- Hiệu ứng chiều sâu dùng CSS perspective và chuyển động con trỏ, không cần WebGL; tắt nghiêng trên cảm ứng hoặc khi người dùng yêu cầu giảm chuyển động.

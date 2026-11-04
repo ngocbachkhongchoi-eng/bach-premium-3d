@@ -310,7 +310,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
 }
 return fail(res,404,'API không tồn tại');}
 function staticFile(p,res){
- const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js','/music.js':'music.js','/settings.js':'settings.js'};
+ const files={'/':'index.html','/index.html':'index.html','/styles.css':'styles.css','/app.js':'app.js','/music.js':'music.js','/settings.js':'settings.js','/experience.js':'experience.js'};
  const filename=files[p];
  if(!filename)return fail(res,404,'Không tìm thấy');
  let data;try{data=fs.readFileSync(path.join(ROOT,'public',filename));}catch{return fail(res,500,'Thiếu file giao diện');}

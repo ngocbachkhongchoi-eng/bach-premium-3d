@@ -144,3 +144,33 @@ html[data-contrast=true] :is(.muted,.small,.product p,.hero p,.navbtn,.footer){c
 html[data-contrast=true][data-theme=light] :is(.muted,.small,.product p,.hero p,.navbtn,.footer){color:#182342}
 @media(max-width:960px){.main-grid{grid-template-columns:1fr}.shell{padding:20px}.hero{padding:35px}.sidebar{position:static}}
 @media(max-width:620px){.shell{padding:12px}.hero{padding:30px 24px 270px}.hero h1{font-size:36px}.panel{padding:19px}.deposit-leaderboard .info-list{grid-template-columns:1fr}.music-player{width:100%;height:210px}.music-section{padding:22px 18px}}
+/* Immersive studio */
+html[data-theme=aurora] body{background:radial-gradient(ellipse at 12% 0,#283d66 0,transparent 48%),radial-gradient(ellipse at 100% 30%,#53325a 0,transparent 48%),#0b1020}
+.hero{isolation:isolate;overflow:hidden;min-height:450px;background:radial-gradient(ellipse at 85% 10%,#dcb6f82b,transparent 55%),linear-gradient(115deg,#1b2945,#322344);border-radius:28px;box-shadow:0 35px 75px #0005,inset 0 1px #eadcff33}
+.hero-content{max-width:65%}.hero h1{font-size:clamp(36px,4.8vw,66px);line-height:1.08;font-weight:650;letter-spacing:-2px}
+.hero .eyebrow{color:#e7cbb2}.hero-art{perspective:900px}
+.premium-pass{background:linear-gradient(125deg,#f7efdd,#b5c9e5 35%,#d2b5e0 65%,#f3d8c5);border-radius:24px;box-shadow:7px 9px 0 #7d6c94,25px 35px 50px #04081580,inset 0 2px 1px #fff9;transition:transform .2s ease-out;transform-style:preserve-3d}
+.premium-pass strong{color:#3c355d;text-shadow:2px 3px #fff6}
+.product{background:linear-gradient(145deg,#30394d,#1c2337);border:1px solid #b7c1dd35;box-shadow:0 10px 0 #080d1f55,0 20px 35px #0003;transition:transform .2s,box-shadow .2s}
+.product:hover{transform:translateY(-7px);box-shadow:0 13px 0 #080d1f66,0 28px 45px #0004;border-color:#c6b3e3}
+.btn{background:linear-gradient(120deg,#b394cf,#8278bb);border-color:#dcc8f777;box-shadow:0 4px 0 #48405f,0 8px 18px #0003}
+.panel,.stat{border-radius:22px}.panel-header{border-bottom:1px solid #8b98ba20;padding-bottom:18px}
+.support-launcher{position:fixed;right:22px;bottom:22px;z-index:40;padding:15px 24px;border-radius:999px;box-shadow:0 12px 35px #0007}
+.support-panel{position:fixed;right:22px;bottom:88px;z-index:41;width:380px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 115px);overflow:auto;padding:20px;background:#1b2540;color:#edf1ff;border:1px solid #8e91b866;border-radius:22px;box-shadow:0 30px 80px #0008}
+.support-panel[hidden]{display:none}.support-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;padding-bottom:14px;border-bottom:1px solid #7385ac44}.support-heading small{display:block;color:#b7c4df;margin-top:5px}.support-heading button{background:transparent;border:1px solid #7482a4;border-radius:8px;padding:8px;color:inherit;cursor:pointer}
+.support-messages{height:220px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:16px 0}.support-form{display:grid;gap:10px}.support-form label{font-size:13px}.support-form textarea{min-height:75px;max-height:160px;resize:vertical}.support-panel p{line-height:1.6}
+.toast{bottom:90px}
+html[data-floating-chat=false] .support-launcher{display:none}
+html[data-floatingchat=false] .support-launcher{display:none}
+html[data-spotlight=false] body{background:var(--bg)}
+html[data-glass=false] .glass{backdrop-filter:none}
+html[data-glass=true] .topbar{backdrop-filter:blur(22px)}
+html[data-rounded=false] :is(.glass,.product,.input,.btn,.info-item){border-radius:4px}
+html[data-borders=false] :is(.glass,.product,.info-item){border-color:transparent!important}
+html[data-gradient-text=false] .shine-title{background:none;color:var(--text)}
+html[data-stats=false] .stat-row{display:none}
+html[data-underlined-links=true] a{text-decoration:underline;text-underline-offset:4px}
+html[data-strong-focus=true] :focus-visible{outline:4px solid #ffce70!important;outline-offset:5px!important}
+html[data-theme=light] .support-panel{background:#f6f5ff;color:#253457}
+@media(max-width:620px){.hero{min-height:0;padding-bottom:280px}.hero h1{font-size:39px;letter-spacing:-1.4px}.hero-content{max-width:100%}.support-launcher{right:12px;bottom:14px;padding:13px 18px}.support-panel{right:12px;bottom:77px;padding:16px}.support-messages{height:180px}.footer{padding-bottom:80px}}
+@media(prefers-reduced-motion:reduce){.product:hover{transform:none}}
