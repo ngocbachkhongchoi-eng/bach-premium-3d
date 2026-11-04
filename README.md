@@ -120,3 +120,9 @@ Nút ⚙ Cài đặt nằm ở góc trên bên phải, dùng được trước v
 - Tài khoản cũ chưa có mã và tài khoản đăng nhập Google không thể dùng luồng này. ADMIN quản lý mật khẩu qua môi trường Render.
 - Đổi SESSION_SECRET ảnh hưởng cả mã khôi phục và khóa mã hóa bàn giao; cần kế hoạch chuyển khóa.
 - Cài đặt hiện có 10 màu và 5 ngôn ngữ: Việt, Anh, Pháp, Tây Ban Nha, Nhật. Ba ngôn ngữ mới dịch các nhãn cài đặt/điều hướng chính; nhãn chưa dịch dùng tiếng Anh, nội dung cửa hàng và lỗi API giữ nguyên.
+
+## Quản lý sản phẩm và cửa hàng
+- Form sửa có Hiện/Ẩn tài khoản và mật khẩu bằng chữ, không dùng icon; quyền truy cập vẫn chỉ ADMIN.
+- Có thể thay ảnh/tệp bằng chọn tệp, thư viện hoặc camera. Không chọn tệp mới giữ nguyên tệp cũ. Sản phẩm có đơn vẫn giữ quy tắc khóa chỉnh sửa; đơn chờ cho phép bổ sung thông tin bàn giao.
+- Cửa hàng lọc theo giá niêm yết: 5k, 10k, 20k, 50k, 100k, 200k, 300k, 500k, 1 triệu. Tất cả/Giá khác giữ các mức ngoài danh sách; giảm giá không đổi nhóm.
+- ADMIN có thể hủy VIP. Top 10 nạp tiền hiển thị ngay dưới thanh đầu trang, trước phần giới thiệu; vẫn có thể ẩn trong Cài đặt.

@@ -38,6 +38,7 @@ test('price updates preserve orders, enforce admin access and persist across res
   cookie=customer.headers.get('set-cookie').split(';')[0];
   const customerCookie=cookie;
   assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,403);
+  assert.equal((await post('/api/admin/vip/revoke',{username:'customer'})).status,403);
   cookie='';
   const login=await post('/api/login',{username:'testadmin',password:'test-password-only'});
   assert.equal(login.status,200);assert.equal((await login.json()).role,'admin');cookie=login.headers.get('set-cookie').split(';')[0];
@@ -62,6 +63,16 @@ test('price updates preserve orders, enforce admin access and persist across res
   const adminCookie=cookie;
   assert.equal((await post('/api/admin/account/add',{title:'Private acc',price:100,accountUsername:'game-user',accountPassword:'game-password'})).status,200);
   const product=record.accs[0];
+  const coverFile={name:'edited.txt',data:Buffer.from('updated attachment').toString('base64')};
+  assert.equal((await post('/api/admin/account/update',{id:product.id,title:'Private acc',price:100,attachment:coverFile})).status,200);
+  assert.equal(record.accs[0].attachment.name,'edited.txt');
+  assert.equal((await post('/api/admin/account/update',{id:product.id,title:'Private acc',price:100})).status,200);
+  assert.equal(record.accs[0].attachment.name,'edited.txt');
+  assert.equal((await post('/api/admin/vip/gift',{username:'customer'})).status,200);
+  assert.equal(record.users.find(u=>u.username==='customer').vip,true);
+  assert.equal((await post('/api/admin/vip/revoke',{username:'customer'})).status,200);
+  assert.equal(record.users.find(u=>u.username==='customer').vip,false);
+
   assert.ok(product.credentials);assert.ok(!JSON.stringify(product).includes('game-password'));
   assert.equal((await post('/api/admin/wallet/credit',{username:'customer',amount:100})).status,200);
   const anonymous=await (await fetch('http://127.0.0.1:'+port+'/api/state')).text();

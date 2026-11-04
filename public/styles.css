@@ -189,3 +189,5 @@ html[data-theme=bronze] body{background:radial-gradient(ellipse at 15% 0,var(--p
 .free-cover{margin:0 0 10px;overflow:hidden;border-radius:14px;background:#10162b}
 .free-cover img{width:100%;height:210px;object-fit:contain;display:block;margin:0}
 @media(max-width:620px){.free-cover img{height:190px}}
+#topDeposits{margin:22px 0}#topDeposits .panel{margin:0;padding:22px 26px}#topDeposits .info-list{display:flex;overflow-x:auto;gap:12px;padding-bottom:4px}#topDeposits .info-item{flex:0 0 230px}#topDeposits .info-item strong{font-size:14px}.price-tabs{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 16px}.price-tabs [aria-pressed=true]{background:#8170b1;color:#fff;border-color:#dac8fc}.credential-box [data-reveal]{align-self:flex-start;margin-top:8px}.product .attachment-view img{height:200px;object-fit:contain;width:100%}
+@media(max-width:620px){#topDeposits .panel{padding:18px}#topDeposits .info-item{flex-basis:205px}.price-tabs{gap:8px}.price-tabs .btn{flex:1 0 27%;font-size:12px}}

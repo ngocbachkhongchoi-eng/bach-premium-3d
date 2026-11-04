@@ -280,7 +280,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   if(username.length>200||password.length>500||Boolean(username)!==Boolean(password))return fail(res,400,'Nhập đủ tài khoản và mật khẩu acc (hoặc để trống cả hai)');
   credentials=username?deliveryVault.seal({username,password}):null;
  }
- if(['account/add','free/add','notice/add'].includes(action)){
+ if(['account/add','account/update','account/delivery','free/add','notice/add'].includes(action)&&'attachment' in b){
   try{attachment=attachmentInput(b.attachment)}catch(e){return fail(res,400,e.message)}
  }
  const result=await mutate(d=>{
@@ -306,6 +306,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   if(!title||!Number.isFinite(price)||price<=0||!Number.isFinite(discount)||(b.link&&!link))return {error:'Vui lòng nhập giá bán lớn hơn 0 đ và thông tin hợp lệ'};
   if(d.orders.some(o=>String(o.acc_id)===String(a.id)&&['pending','approved','sold'].includes(o.status)))return {error:'Sản phẩm có đơn chờ duyệt/đã bán; không thể sửa giá hoặc thông tin bàn giao'};
   if(credentials!==undefined)a.credentials=credentials;
+  if(attachment!==undefined)a.attachment=attachment;
   Object.assign(a,{title,info,link,price,discount,type:b.type==='vip'?'vip':'normal',updated_at:now()});break;
  }
  case 'account/delivery':{
@@ -313,6 +314,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
   if(productAvailability(a,d)!=='pending')return {error:'Chỉ cập nhật link cho sản phẩm đang chờ duyệt'};
   const link=b.link?validateUrl(b.link):'';if((b.link&&!link)||(!link&&!(credentials===undefined?a.credentials:credentials)))return {error:'Nhập link hoặc tài khoản và mật khẩu để bàn giao'};
   if(credentials!==undefined)a.credentials=credentials;
+  if(attachment!==undefined)a.attachment=attachment;
   a.link=link;a.updated_at=now();break;
  }
  case 'account/delete':{if(d.orders.some(o=>String(o.acc_id)===String(b.id)&&['pending','approved','sold'].includes(o.status)))return {error:'Sản phẩm còn đơn hàng đang xử lý'};d.accs=d.accs.filter(x=>String(x.id)!==String(b.id));break;}
@@ -326,6 +328,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
  case 'notice/add':{const title=clean(b.title,120),content=clean(b.content,1000);if(!title||!content)return {error:'Vui lòng nhập thông báo'};d.notifs.push({attachment,id:id(),title,content,at:now()});break;}
  case 'notice/delete':d.notifs=d.notifs.filter(x=>String(x.id)!==String(b.id));break;
  case 'chat/reply':{const username=clean(b.username,40),text=clean(b.text,1500);if(!d.users.some(x=>x.username===username)||!text)return {error:'Tin nhắn hoặc khách không hợp lệ'};d.messages.push({id:id(),username,from:'admin',text,at:now()});break;}
+ case 'vip/revoke':{const u=d.users.find(x=>x.username===clean(b.username,40));if(!u)return {error:'Không tìm thấy khách'};u.vip=false;break;}
  case 'vip/gift':{const u=d.users.find(x=>x.username===clean(b.username,40));if(!u)return {error:'Không tìm thấy khách'};u.vip=true;break;}
  default:return {error:'Chức năng không tồn tại'};
  }

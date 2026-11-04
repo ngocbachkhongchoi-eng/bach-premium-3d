@@ -88,6 +88,26 @@ const assert=require('node:assert/strict');
  await page.evaluate(()=>recoveryDialog('customer'));
  assert.equal(await page.locator('#resetPasswordForm [name=oldPassword]').count(),0);
  assert.equal(await page.locator('#resetPasswordForm [name=recoveryCode]').count(),1);
+ await page.evaluate(()=>{
+  closeDialog();data.accs=[{id:'p5',title:'Acc five',price:5000,priceReady:true,availability:'available'},{id:'p10',title:'Acc ten',price:10000,priceReady:true,availability:'available'},{id:'p1',title:'Acc other',price:1000,priceReady:true,availability:'available'}];navigate('home');
+ });
+ await page.locator('[data-price-filter="5000"]').click();
+ assert.equal(await page.locator('#app .product').count(),1);assert.ok((await page.locator('#app .product').textContent()).includes('Acc five'));
+ await page.locator('[data-price-filter="other"]').click();
+ assert.equal(await page.locator('#app .product').count(),1);assert.ok((await page.locator('#app .product').textContent()).includes('Acc other'));
+ assert.ok(await page.evaluate(()=>document.querySelector('#topDeposits').compareDocumentPosition(document.querySelector('.hero'))&Node.DOCUMENT_POSITION_FOLLOWING));
+ await page.evaluate(()=>{
+  data.profile={role:'admin',username:'testadmin'};
+  data.admin={accounts:[{id:'edit',title:'Edit me',price:5000,priceReady:true,availability:'available',credentials:{username:'private-user',password:'private-pass'}}],users:[{username:'customer',vip:true}]};
+  navigate('admin');editAccount('edit');
+ });
+ assert.equal(await page.locator('#editAccForm [data-upload]').count(),3);
+ await page.locator('#editAccForm [data-reveal="accountPassword"]').click();
+ assert.equal(await page.locator('#editAccForm [name=accountPassword]').getAttribute('type'),'text');
+ await page.locator('#editAccForm [data-reveal="accountPassword"]').click();
+ assert.equal(await page.locator('#editAccForm [name=accountPassword]').getAttribute('type'),'password');
+ await page.evaluate(()=>{closeDialog();adminTab='vip';render()});
+ assert.equal(await page.getByRole('button',{name:'Hủy VIP',exact:true}).count(),1);
  assert.deepEqual(errors,[]);
  console.log('PASS settings: five themes, Gmail display, volume/mute/autoplay, language, text/motion/layout, persistence, reset, keyboard close, mobile overflow');
  }finally{await browser.close()}
