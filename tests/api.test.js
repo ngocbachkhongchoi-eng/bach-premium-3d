@@ -145,5 +145,13 @@ test('price updates preserve orders, enforce admin access and persist across res
   assert.ok(!JSON.stringify(record).includes('012345'));
   await post('/api/logout',{});
   assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,401);
+  for(const suffix of ['.extra','.'])assert.equal((await post('/api/admin/account/price',{id:'a',price:1},{Cookie:cookie+suffix})).status,401);
+  await stop();
+  record.security.revoked.push(...Array.from({length:2001},(_,i)=>({digest:'fixture-'+i,exp:Date.now()+3600000})));
+  await start();
+  assert.equal((await post('/api/login',{username:'customer',password:'changed-password'})).status,200);
+  assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,401);
+  for(const suffix of ['.extra','.'])assert.equal((await post('/api/admin/account/price',{id:'a',price:1},{Cookie:cookie+suffix})).status,401);
+
  }finally{await stop();await new Promise(r=>bin.close(r))}
 });

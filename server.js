@@ -56,7 +56,7 @@ function verifyPass(p,stored){if(typeof stored!=='string')return false;const [sa
 const adminHash=hashPass(ADMIN_PASSWORD);
 const recoveryProof=code=>crypto.createHmac('sha256',SECRET).update('recovery:'+code).digest('hex');
 function signedToken(user,role){const payload=Buffer.from(JSON.stringify({u:user,r:role,j:crypto.randomUUID(),v:role==='user'?(db.users.find(x=>x.username===user)?.authVersion||0):0,exp:now()+(role==='admin'?4:24)*3600000})).toString('base64url');const sig=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');return payload+'.'+sig;}
-function checkToken(raw){try{const [payload,sig]=raw.split('.');const expect=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');if(!sig||sig.length!==expect.length||!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expect)))return null;const t=JSON.parse(Buffer.from(payload,'base64url').toString());if(t.exp<now()||!['admin','user'].includes(t.r))return null;const digest=crypto.createHash('sha256').update(raw).digest('hex');if((db.security?.revoked||[]).some(x=>x.digest===digest&&x.exp>now()))return null;if(t.r==='admin'&&t.u!==ADMIN_USER)return null;if(t.r==='user'&&!db.users.some(u=>u.username===t.u&&(u.authVersion||0)===(t.v||0)))return null;return {username:t.u,role:t.r};}catch{return null}}
+function checkToken(raw){try{if(typeof raw!=='string'||! /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(raw))return null;const [payload,sig]=raw.split('.');const expect=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');if(!sig||sig.length!==expect.length||!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expect)))return null;const t=JSON.parse(Buffer.from(payload,'base64url').toString());if(!Number.isSafeInteger(t.exp)||t.exp<=now()||typeof t.u!=='string'||!['admin','user'].includes(t.r))return null;const digest=crypto.createHash('sha256').update(raw).digest('hex');if((db.security?.revoked||[]).some(x=>x.digest===digest&&x.exp>now()))return null;if(t.r==='admin'&&t.u!==ADMIN_USER)return null;if(t.r==='user'&&!db.users.some(u=>u.username===t.u&&(u.authVersion||0)===(t.v||0)))return null;return {username:t.u,role:t.r};}catch{return null}}
 function auth(req){const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('bp_session='));return cookie?checkToken(cookie.slice(11)):null}
 function cookieHeader(token,req){const isHttps=process.env.NODE_ENV==='production';return 'bp_session='+token+'; Path=/; HttpOnly; SameSite=Lax; Max-Age='+ (token?86400:0) + (isHttps?'; Secure':'');}
 function respond(res,status,data,extra={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer',...securityHeaders(),...extra});res.end(JSON.stringify(data));}
@@ -120,7 +120,8 @@ function cleanupSecurity(d){
  for(const [k,v] of Object.entries(sec.loginIps))if(!v||Math.max(Number(v.until||0),Number(v.start||0)+FAIL_WINDOW_MS)<ts)delete sec.loginIps[k];
  const pairs=Object.entries(sec.loginIps);
  if(pairs.length>MAX_IP_ENTRIES){pairs.sort((a,b)=>Number(a[1].start||0)-Number(b[1].start||0));for(const [k] of pairs.slice(0,pairs.length-MAX_IP_ENTRIES))delete sec.loginIps[k];}
- sec.revoked=sec.revoked.filter(x=>x&&x.exp>ts).slice(-2000);
+ // Never discard unexpired revocations: doing so reactivates logged-out sessions.
+ sec.revoked=sec.revoked.filter(x=>x&&x.exp>ts);
 }
 // Persist lockout inside JSONBin to survive free-plan idle/restart.
 // serialize/mutate ensures atomicity only in a SINGLE running instance.
