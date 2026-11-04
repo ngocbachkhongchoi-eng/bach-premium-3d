@@ -96,22 +96,22 @@ test('price updates preserve orders, enforce admin access and persist across res
   assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id)).status,200);
 
   const oldHash=record.users.find(u=>u.username==='customer').passwordHash;
-  const reset={username:'customer',oldPassword:'customer-password',newPassword:'changed-password',recoveryCode:'012345'};
+  const reset={username:'customer',newPassword:'changed-password',recoveryCode:'012345'};
   assert.equal((await post('/api/password/check',{username:'missing'})).status,404);
   assert.equal((await post('/api/password/check',{username:'gg_fixture'})).status,400);
   assert.equal((await post('/api/password/check',{username:'customer'})).status,200);
   assert.equal((await post('/api/password/reset',{...reset,recoveryCode:'999999'})).status,400);
-  assert.equal((await post('/api/password/reset',{...reset,oldPassword:'wrong'})).status,400);
+  assert.equal((await post('/api/password/reset',{...reset,recoveryCode:'123'})).status,400);
   assert.equal(record.users.find(u=>u.username==='customer').passwordHash,oldHash);
   assert.equal((await post('/api/password/reset',reset)).status,200);
   const expired=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:customerCookie}})).json();
   assert.equal(expired.profile,null);
   assert.equal((await post('/api/login',{username:'customer',password:'changed-password'})).status,200);
   assert.equal((await post('/api/login',{username:'customer',password:'customer-password'})).status,401);
-  for(let i=0;i<5;i++)assert.equal((await post('/api/password/reset',{...reset,oldPassword:'changed-password',recoveryCode:'999999'})).status,i===4?429:400);
+  for(let i=0;i<5;i++)assert.equal((await post('/api/password/reset',{...reset,recoveryCode:'999999'})).status,i===4?429:400);
   const lockedHash=record.users.find(u=>u.username==='customer').passwordHash;
   await stop();await start();
-  assert.equal((await post('/api/password/reset',{...reset,oldPassword:'changed-password'})).status,429);
+  assert.equal((await post('/api/password/reset',reset)).status,429);
   assert.equal(record.users.find(u=>u.username==='customer').passwordHash,lockedHash);
   assert.ok(!JSON.stringify(record).includes('012345'));
   await post('/api/logout',{});

@@ -80,6 +80,9 @@ const assert=require('node:assert/strict');
  await page.getByRole('button',{name:'Bạn đã quên mật khẩu?'}).click();
  await page.locator('#lookupPasswordForm').waitFor();
  assert.ok(await page.locator('.recovery-panel').isVisible());
+ await page.evaluate(()=>recoveryDialog('customer'));
+ assert.equal(await page.locator('#resetPasswordForm [name=oldPassword]').count(),0);
+ assert.equal(await page.locator('#resetPasswordForm [name=recoveryCode]').count(),1);
  assert.deepEqual(errors,[]);
  console.log('PASS settings: five themes, Gmail display, volume/mute/autoplay, language, text/motion/layout, persistence, reset, keyboard close, mobile overflow');
  }finally{await browser.close()}

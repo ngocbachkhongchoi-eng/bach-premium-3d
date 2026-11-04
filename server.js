@@ -226,15 +226,15 @@ if(['/api/password/check','/api/password/reset'].includes(pathname)&&method==='P
  if(!existing)return fail(res,404,'Tài khoản không có trên hệ thống');
  if(!existing.passwordHash||!existing.recoveryHash)return fail(res,400,'Tài khoản này chưa có mã khôi phục hoặc dùng đăng nhập Google. Vui lòng liên hệ ADMIN hoặc đăng nhập Google.');
  if(pathname==='/api/password/check')return respond(res,200,{ok:true});
- if(typeof b.recoveryCode!=='string'||!/^\d{6}$/.test(b.recoveryCode)||typeof b.oldPassword!=='string'||b.oldPassword.length>128||typeof b.newPassword!=='string'||b.newPassword.length<8||b.newPassword.length>128)return fail(res,400,'Nhập mã 6 chữ số, mật khẩu cũ và mật khẩu mới 8–128 ký tự');
+ if(typeof b.recoveryCode!=='string'||!/^\d{6}$/.test(b.recoveryCode)||typeof b.newPassword!=='string'||b.newPassword.length<8||b.newPassword.length>128)return fail(res,400,'Nhập mã 6 chữ số và mật khẩu mới 8–128 ký tự');
  const result=await mutate(d=>{
   const u=d.users.find(x=>x.username===existing.username),ts=now();
   if(u.recoveryLock?.until>ts)return {status:429,error:'Đã thử sai quá nhiều lần. Thử lại sau 30 phút.',_skipSave:true};
-  const correctCode=verifyPass(recoveryProof(b.recoveryCode),u.recoveryHash),correctPassword=verifyPass(b.oldPassword,u.passwordHash);
-  if(!correctCode||!correctPassword){
+  const correctCode=verifyPass(recoveryProof(b.recoveryCode),u.recoveryHash);
+  if(!correctCode){
    const lock=u.recoveryLock&&ts-u.recoveryLock.start<30*60000?u.recoveryLock:{start:ts,count:0,until:0};
    lock.count++;if(lock.count>=5)lock.until=ts+30*60000;u.recoveryLock=lock;
-   return {ok:false,status:lock.until>ts?429:400,message:lock.until>ts?'Đã thử sai 5 lần. Tạm khóa đổi mật khẩu trong 30 phút.':'Mã xác thực hoặc mật khẩu cũ không đúng'};
+   return {ok:false,status:lock.until>ts?429:400,message:lock.until>ts?'Đã thử sai 5 lần. Tạm khóa đổi mật khẩu trong 30 phút.':'Mã xác thực không đúng'};
   }
   u.passwordHash=hashPass(b.newPassword);u.authVersion=(u.authVersion||0)+1;delete u.recoveryLock;
   return {ok:true};
