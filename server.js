@@ -194,10 +194,10 @@ if(pathname==='/api/auth/google/callback'&&method==='GET'){
 }
 if(pathname.startsWith('/api/attachment/')&&method==='GET'){
  const parts=pathname.split('/'),kind=parts[3],itemId=decodeURIComponent(parts[4]||'');
- if(kind==='free'&&!requireRole(res,auth(req)))return;
  const list=kind==='account'?db.accs:kind==='free'?db.freebies:kind==='notice'?db.notifs:[];
  const item=list.find(x=>String(x.id)===itemId),file=item?.attachment;
  if(!file)return fail(res,404,'Không tìm thấy tệp');
+ if(kind==='free'&&!['image/jpeg','image/png','image/webp'].includes(file.type)&&!requireRole(res,auth(req)))return;
  const bytes=Buffer.from(file.data,'base64');
  res.writeHead(200,{...securityHeaders(),'Content-Type':file.type,'Content-Length':bytes.length,'Cache-Control':'no-store','Content-Disposition':(file.type.startsWith('image/')?'inline':'attachment')+"; filename*=UTF-8''"+encodeURIComponent(file.name)});
  return res.end(bytes);

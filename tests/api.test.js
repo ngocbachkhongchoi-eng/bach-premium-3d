@@ -92,6 +92,12 @@ test('price updates preserve orders, enforce admin access and persist across res
   assert.equal(await freeDownload.text(),'download test');
   const freeInfo=await (await fetch('http://127.0.0.1:'+port+'/api/free/'+free.id,{headers:{Cookie:cookie}})).json();
   assert.equal(freeInfo.url,'/api/attachment/free/'+free.id);
+  assert.equal((await post('/api/admin/free/add',{title:'Image preview',url:'https://example.com/download',attachment:{name:'cover.png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1sAAAAASUVORK5CYII='}})).status,200);
+  const cover=record.freebies[0];
+  const preview=await fetch('http://127.0.0.1:'+port+'/api/attachment/free/'+cover.id);
+  assert.equal(preview.status,200);assert.equal(preview.headers.get('content-type'),'image/png');
+  assert.equal((await fetch('http://127.0.0.1:'+port+'/api/free/'+cover.id)).status,401);
+
   await stop();await start();
   assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id)).status,200);
 

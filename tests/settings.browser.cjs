@@ -8,8 +8,9 @@ const assert=require('node:assert/strict');
  const messages=[];const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('http://bach.test/**',route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path==='/cover.png')return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aP1sAAAAASUVORK5CYII=','base64')});
   if(path==='/api/chat'){messages.push({from:'user',text:route.request().postDataJSON().text,at:Date.now()});return route.fulfill({json:{ok:true}})}
-  if(path==='/api/state')return route.fulfill({json:{mine:{messages},accs:[],freebies:[],top:[],notifs:[],googleEnabled:false,profile:{role:'user',username:'gg_random',email:'myname@gmail.com',balance:0}}});
+  if(path==='/api/state')return route.fulfill({json:{mine:{messages},accs:[],freebies:[{id:'cover',title:'Ảnh bìa miễn phí',attachment:{type:'image/png',url:'/cover.png'}}],top:[],notifs:[],googleEnabled:false,profile:{role:'user',username:'gg_random',email:'myname@gmail.com',balance:0}}});
   return route.fulfill({body:fs.readFileSync(require('node:path').join(__dirname,'..','public',path==='/'?'index.html':path.slice(1))),contentType:path.endsWith('.js')?'application/javascript':path.endsWith('.css')?'text/css':'text/html'});
  });
  await page.route('https://www.youtube.com/**',route=>route.fulfill({contentType:'text/html',body:'<html>Music preview</html>'}));
@@ -17,6 +18,10 @@ const assert=require('node:assert/strict');
  await page.goto('http://bach.test/');
  await page.locator('#who').filter({hasText:'myname@gmail.com'}).waitFor();
  assert.ok(!(await page.locator('#who').textContent()).includes('gg_random'));
+ await page.evaluate(()=>navigate('free'));
+ await page.locator('.free-cover img').waitFor();
+ assert.equal(await page.locator('.free-cover img').getAttribute('alt'),'Ảnh bìa miễn phí');
+ await page.evaluate(()=>navigate('home'));
  await page.locator('.support-launcher').click();
  await page.locator('#supportText').fill('Xin hỗ trợ đơn hàng');
  await page.locator('.support-form [type=submit]').click();
