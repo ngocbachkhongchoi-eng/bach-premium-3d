@@ -111,3 +111,12 @@ Nút ⚙ Cài đặt nằm ở góc trên bên phải, dùng được trước v
 - Khung chat cập nhật mỗi 15 giây khi đang mở và tab hiển thị; đóng khung thì dừng cập nhật. Không hiển thị giả trạng thái ADMIN online.
 - Cài đặt thêm 10 lựa chọn: nút chat nổi, nghiêng theo con trỏ, ánh sáng nền, kính, bo góc, viền, chữ chuyển sắc, thống kê cửa hàng, gạch chân link, viền bàn phím.
 - Hiệu ứng chiều sâu dùng CSS perspective và chuyển động con trỏ, không cần WebGL; tắt nghiêng trên cảm ứng hoặc khi người dùng yêu cầu giảm chuyển động.
+
+## Mã xác thực và đổi mật khẩu
+- Tài khoản mật khẩu tạo mới phải chọn mã gồm đúng 6 chữ số, kể cả số 0 ở đầu. Mã được HMAC với SESSION_SECRET rồi băm scrypt có salt; không lưu mã rõ.
+- Đăng nhập → Bạn đã quên mật khẩu? mở bảng xanh: kiểm tra tên tài khoản, nhập mã, mật khẩu cũ, mật khẩu mới và xác nhận.
+- Theo yêu cầu hiện tại, đây là đổi mật khẩu có xác minh thêm, vẫn cần mật khẩu cũ. Không dùng để khôi phục nếu đã quên hoàn toàn mật khẩu cũ.
+- Sau 5 lần sai mã/mật khẩu, khóa đổi mật khẩu tài khoản 30 phút, lưu khóa trong JSONBin. Có giới hạn yêu cầu theo IP. Thành công tăng phiên bản xác thực, vô hiệu hóa các phiên khách cũ.
+- Tài khoản cũ chưa có mã và tài khoản đăng nhập Google không thể dùng luồng này. ADMIN quản lý mật khẩu qua môi trường Render.
+- Đổi SESSION_SECRET ảnh hưởng cả mã khôi phục và khóa mã hóa bàn giao; cần kế hoạch chuyển khóa.
+- Cài đặt hiện có 10 màu và 5 ngôn ngữ: Việt, Anh, Pháp, Tây Ban Nha, Nhật. Ba ngôn ngữ mới dịch các nhãn cài đặt/điều hướng chính; nhãn chưa dịch dùng tiếng Anh, nội dung cửa hàng và lỗi API giữ nguyên.

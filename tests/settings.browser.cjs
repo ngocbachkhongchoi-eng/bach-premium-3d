@@ -25,7 +25,7 @@ const assert=require('node:assert/strict');
  await page.locator('[data-support-close]').click();
  await page.locator('#openSettings').click();
  await page.locator('#settingsDialog[open]').waitFor();
- for(const theme of ['ocean','rose','sunset','light','aurora']){
+ for(const theme of ['ocean','rose','sunset','light','aurora','emerald','ruby','graphite','lavender','bronze']){
   await page.locator('[name=theme]').selectOption(theme);
   assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
  }
@@ -45,6 +45,9 @@ const assert=require('node:assert/strict');
  await page.locator('[name=motion]').selectOption('reduced');
  await page.locator('[name=compact]').check();
  await page.locator('[name=toasts]').uncheck();
+ for(const [code,title] of [['fr','Paramètres'],['es','Ajustes'],['ja','設定']]){
+  await page.locator('[name=language]').selectOption(code);assert.equal(await page.locator('#settingsTitle').textContent(),title);
+ }
  await page.locator('[name=language]').selectOption('en');
  assert.equal(await page.locator('#settingsTitle').textContent(),'Settings');
  assert.equal(await page.locator('html').getAttribute('lang'),'en');
@@ -68,6 +71,15 @@ const assert=require('node:assert/strict');
  assert.equal(await page.locator('[name=volume]').inputValue(),'65');
  assert.equal(await page.locator('html').getAttribute('lang'),'vi');
  assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('bach.preferences.v1')).autoplay));
+ await page.locator('[data-settings-close]').click();
+ await page.evaluate(()=>navigate('register'));
+ assert.equal(await page.locator('#recoveryCode').getAttribute('pattern'),'[0-9]{6}');
+ await page.locator('#recoveryCode').fill('123');
+ assert.equal(await page.locator('#recoveryCode').evaluate(el=>el.checkValidity()),false);
+ await page.evaluate(()=>navigate('login'));
+ await page.getByRole('button',{name:'Bạn đã quên mật khẩu?'}).click();
+ await page.locator('#lookupPasswordForm').waitFor();
+ assert.ok(await page.locator('.recovery-panel').isVisible());
  assert.deepEqual(errors,[]);
  console.log('PASS settings: five themes, Gmail display, volume/mute/autoplay, language, text/motion/layout, persistence, reset, keyboard close, mobile overflow');
  }finally{await browser.close()}

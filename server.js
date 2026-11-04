@@ -54,8 +54,9 @@ const validateUrl=(s)=>{try{const u=new URL(s);if(!['https:','http:'].includes(u
 function hashPass(password){const salt=crypto.randomBytes(16).toString('hex');return salt+':'+crypto.scryptSync(password,salt,64).toString('hex');}
 function verifyPass(p,stored){if(typeof stored!=='string')return false;const [salt,hash]=stored.split(':');if(!salt||!hash||!/^[a-f0-9]{128}$/i.test(hash))return false;const actual=crypto.scryptSync(p,salt,64);return crypto.timingSafeEqual(actual,Buffer.from(hash,'hex'));}
 const adminHash=hashPass(ADMIN_PASSWORD);
-function signedToken(user,role){const payload=Buffer.from(JSON.stringify({u:user,r:role,j:crypto.randomUUID(),exp:now()+(role==='admin'?4:24)*3600000})).toString('base64url');const sig=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');return payload+'.'+sig;}
-function checkToken(raw){try{const [payload,sig]=raw.split('.');const expect=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');if(!sig||sig.length!==expect.length||!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expect)))return null;const t=JSON.parse(Buffer.from(payload,'base64url').toString());if(t.exp<now()||!['admin','user'].includes(t.r))return null;const digest=crypto.createHash('sha256').update(raw).digest('hex');if((db.security?.revoked||[]).some(x=>x.digest===digest&&x.exp>now()))return null;if(t.r==='admin'&&t.u!==ADMIN_USER)return null;if(t.r==='user'&&!db.users.some(u=>u.username===t.u))return null;return {username:t.u,role:t.r};}catch{return null}}
+const recoveryProof=code=>crypto.createHmac('sha256',SECRET).update('recovery:'+code).digest('hex');
+function signedToken(user,role){const payload=Buffer.from(JSON.stringify({u:user,r:role,j:crypto.randomUUID(),v:role==='user'?(db.users.find(x=>x.username===user)?.authVersion||0):0,exp:now()+(role==='admin'?4:24)*3600000})).toString('base64url');const sig=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');return payload+'.'+sig;}
+function checkToken(raw){try{const [payload,sig]=raw.split('.');const expect=crypto.createHmac('sha256',SECRET).update(payload).digest('base64url');if(!sig||sig.length!==expect.length||!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expect)))return null;const t=JSON.parse(Buffer.from(payload,'base64url').toString());if(t.exp<now()||!['admin','user'].includes(t.r))return null;const digest=crypto.createHash('sha256').update(raw).digest('hex');if((db.security?.revoked||[]).some(x=>x.digest===digest&&x.exp>now()))return null;if(t.r==='admin'&&t.u!==ADMIN_USER)return null;if(t.r==='user'&&!db.users.some(u=>u.username===t.u&&(u.authVersion||0)===(t.v||0)))return null;return {username:t.u,role:t.r};}catch{return null}}
 function auth(req){const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('bp_session='));return cookie?checkToken(cookie.slice(11)):null}
 function cookieHeader(token,req){const isHttps=process.env.NODE_ENV==='production';return 'bp_session='+token+'; Path=/; HttpOnly; SameSite=Lax; Max-Age='+ (token?86400:0) + (isHttps?'; Secure':'');}
 function respond(res,status,data,extra={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer',...securityHeaders(),...extra});res.end(JSON.stringify(data));}
@@ -214,8 +215,32 @@ if(pathname==='/api/register'&&method==='POST'){
  if(!rateLimit(req,'register',8,3600000))return fail(res,429,'Thử lại sau');const username=clean(b.username,40),p=String(b.password||'');
  if(!/^[\p{L}\p{N}_]{3,30}$/u.test(username)||p.length<8||p.length>128)return fail(res,400,'Tên 3–30 ký tự (chữ, số, _) và mật khẩu tối thiểu 8 ký tự');
  if(username.toLowerCase()===ADMIN_USER.toLowerCase())return fail(res,400,'Tên đăng nhập không hợp lệ');
- const out=await mutate(d=>{if(d.users.some(u=>u.username.toLowerCase()===username.toLowerCase()))return {error:'Tên đã tồn tại'};d.users.push({username,passwordHash:hashPass(p),balance:0,created_at:now()});return {ok:true}});
+ if(typeof b.recoveryCode!=='string'||!/^\d{6}$/.test(b.recoveryCode))return fail(res,400,'Mã xác thực phải có đúng 6 chữ số');
+ const out=await mutate(d=>{if(d.users.some(u=>u.username.toLowerCase()===username.toLowerCase()))return {error:'Tên đã tồn tại'};d.users.push({username,recoveryHash:hashPass(recoveryProof(b.recoveryCode)),passwordHash:hashPass(p),balance:0,created_at:now()});return {ok:true}});
  return out.error?fail(res,409,out.error):respond(res,200,{ok:true});
+}
+if(['/api/password/check','/api/password/reset'].includes(pathname)&&method==='POST'){
+ if(!rateLimit(req,'password-recovery',15,30*60000))return fail(res,429,'Thử lại sau 30 phút');
+ const username=clean(b.username,40);
+ const existing=db.users.find(u=>u.username.toLowerCase()===username.toLowerCase());
+ if(!existing)return fail(res,404,'Tài khoản không có trên hệ thống');
+ if(!existing.passwordHash||!existing.recoveryHash)return fail(res,400,'Tài khoản này chưa có mã khôi phục hoặc dùng đăng nhập Google. Vui lòng liên hệ ADMIN hoặc đăng nhập Google.');
+ if(pathname==='/api/password/check')return respond(res,200,{ok:true});
+ if(typeof b.recoveryCode!=='string'||!/^\d{6}$/.test(b.recoveryCode)||typeof b.oldPassword!=='string'||b.oldPassword.length>128||typeof b.newPassword!=='string'||b.newPassword.length<8||b.newPassword.length>128)return fail(res,400,'Nhập mã 6 chữ số, mật khẩu cũ và mật khẩu mới 8–128 ký tự');
+ const result=await mutate(d=>{
+  const u=d.users.find(x=>x.username===existing.username),ts=now();
+  if(u.recoveryLock?.until>ts)return {status:429,error:'Đã thử sai quá nhiều lần. Thử lại sau 30 phút.',_skipSave:true};
+  const correctCode=verifyPass(recoveryProof(b.recoveryCode),u.recoveryHash),correctPassword=verifyPass(b.oldPassword,u.passwordHash);
+  if(!correctCode||!correctPassword){
+   const lock=u.recoveryLock&&ts-u.recoveryLock.start<30*60000?u.recoveryLock:{start:ts,count:0,until:0};
+   lock.count++;if(lock.count>=5)lock.until=ts+30*60000;u.recoveryLock=lock;
+   return {ok:false,status:lock.until>ts?429:400,message:lock.until>ts?'Đã thử sai 5 lần. Tạm khóa đổi mật khẩu trong 30 phút.':'Mã xác thực hoặc mật khẩu cũ không đúng'};
+  }
+  u.passwordHash=hashPass(b.newPassword);u.authVersion=(u.authVersion||0)+1;delete u.recoveryLock;
+  return {ok:true};
+ });
+ if(result.error||!result.ok)return fail(res,result.status||400,result.error||result.message);
+ return respond(res,200,{ok:true},{'Set-Cookie':cookieHeader('',req)});
 }
 if(pathname==='/api/login'&&method==='POST'){
  if(!rateLimit(req,'login',20,15*60000))return fail(res,429,'Quá nhiều yêu cầu đăng nhập, thử lại sau');

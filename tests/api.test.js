@@ -33,7 +33,7 @@ test('price updates preserve orders, enforce admin access and persist across res
   const publicPayload=await (await fetch('http://127.0.0.1:'+port+'/api/state')).text();
   assert.ok(!publicPayload.includes('verified@gmail.com'));
 
-  assert.equal((await post('/api/register',{username:'customer',password:'customer-password'})).status,200);
+  assert.equal((await post('/api/register',{username:'customer',password:'customer-password',recoveryCode:'012345'})).status,200);
   const customer=await post('/api/login',{username:'customer',password:'customer-password',admin:true});
   cookie=customer.headers.get('set-cookie').split(';')[0];
   const customerCookie=cookie;
@@ -94,6 +94,26 @@ test('price updates preserve orders, enforce admin access and persist across res
   assert.equal(freeInfo.url,'/api/attachment/free/'+free.id);
   await stop();await start();
   assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id)).status,200);
+
+  const oldHash=record.users.find(u=>u.username==='customer').passwordHash;
+  const reset={username:'customer',oldPassword:'customer-password',newPassword:'changed-password',recoveryCode:'012345'};
+  assert.equal((await post('/api/password/check',{username:'missing'})).status,404);
+  assert.equal((await post('/api/password/check',{username:'gg_fixture'})).status,400);
+  assert.equal((await post('/api/password/check',{username:'customer'})).status,200);
+  assert.equal((await post('/api/password/reset',{...reset,recoveryCode:'999999'})).status,400);
+  assert.equal((await post('/api/password/reset',{...reset,oldPassword:'wrong'})).status,400);
+  assert.equal(record.users.find(u=>u.username==='customer').passwordHash,oldHash);
+  assert.equal((await post('/api/password/reset',reset)).status,200);
+  const expired=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:customerCookie}})).json();
+  assert.equal(expired.profile,null);
+  assert.equal((await post('/api/login',{username:'customer',password:'changed-password'})).status,200);
+  assert.equal((await post('/api/login',{username:'customer',password:'customer-password'})).status,401);
+  for(let i=0;i<5;i++)assert.equal((await post('/api/password/reset',{...reset,oldPassword:'changed-password',recoveryCode:'999999'})).status,i===4?429:400);
+  const lockedHash=record.users.find(u=>u.username==='customer').passwordHash;
+  await stop();await start();
+  assert.equal((await post('/api/password/reset',{...reset,oldPassword:'changed-password'})).status,429);
+  assert.equal(record.users.find(u=>u.username==='customer').passwordHash,lockedHash);
+  assert.ok(!JSON.stringify(record).includes('012345'));
   await post('/api/logout',{});
   assert.equal((await post('/api/admin/account/price',{id:'a',price:1})).status,401);
  }finally{await stop();await new Promise(r=>bin.close(r))}
