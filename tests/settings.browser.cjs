@@ -108,6 +108,14 @@ const assert=require('node:assert/strict');
  assert.equal(await page.locator('#editAccForm [name=accountPassword]').getAttribute('type'),'password');
  await page.evaluate(()=>{closeDialog();adminTab='vip';render()});
  assert.equal(await page.getByRole('button',{name:'Hủy VIP',exact:true}).count(),1);
+ await page.evaluate(()=>{adminTab='products';render()});
+ await page.locator('[data-act=delAcc]').click();
+ await page.locator('#overlay:not(.hide)').waitFor();
+ let deletedId;
+ await page.route('http://bach.test/api/admin/account/delete',route=>{deletedId=route.request().postDataJSON().id;return route.fulfill({json:{ok:true}})});
+ await page.locator('[data-dialog=yes]').click();
+ await page.waitForFunction(()=>document.querySelector('#overlay').classList.contains('hide'));
+ assert.equal(deletedId,'edit');
  assert.deepEqual(errors,[]);
  console.log('PASS settings: five themes, Gmail display, volume/mute/autoplay, language, text/motion/layout, persistence, reset, keyboard close, mobile overflow');
  }finally{await browser.close()}

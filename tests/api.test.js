@@ -60,6 +60,7 @@ test('price updates preserve orders, enforce admin access and persist across res
   const state=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:cookie}})).json();
   assert.equal(state.admin.accounts[0].price,75000);assert.equal(state.admin.orders[0].price_paid,50000);
   for(const path of ['/','/app.js','/styles.css','/settings.js','/music.js']){const r=await fetch('http://127.0.0.1:'+port+path);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(r.headers.get('content-security-policy'),/frame-src https:\/\/www.youtube.com/)}
+  assert.equal((await post('/api/admin/account/delete',{id:'a'})).status,400);
   assert.equal((await post('/api/admin/order/approve',{id:'o'})).status,200);
   const publicState=await (await fetch('http://127.0.0.1:'+port+'/api/state')).json();
   assert.equal(publicState.accs.some(a=>a.id==='a'),false);
@@ -124,6 +125,19 @@ test('price updates preserve orders, enforce admin access and persist across res
   await stop();await start();
   assert.equal((await fetch('http://127.0.0.1:'+port+'/api/attachment/notice/'+note.id)).status,200);
 
+  assert.equal((await post('/api/admin/account/delete',{id:product.id},{Cookie:customerCookie})).status,403);
+  assert.equal((await post('/api/admin/account/delete',{id:product.id})).status,200);
+  assert.ok(!(await getState()).admin.accounts.some(a=>a.id===product.id));
+  cookie=customerCookie;
+  assert.deepEqual((await getState()).mine.orders[0].credentials,{username:'game-user',password:'game-password'});
+  assert.equal((await post('/api/order',{accId:product.id})).status,400);
+  cookie=adminCookie;
+  assert.equal((await post('/api/admin/account/add',{title:'Delete me',price:100})).status,200);
+  const removedId=record.accs[0].id;
+  assert.equal((await post('/api/admin/account/delete',{id:removedId})).status,200);
+  assert.ok(!record.accs.some(a=>a.id===removedId));
+  await stop();await start();
+  assert.ok(!(await getState()).admin.accounts.some(a=>[removedId,product.id].includes(a.id)));
   const oldHash=record.users.find(u=>u.username==='customer').passwordHash;
   const reset={username:'customer',newPassword:'changed-password',recoveryCode:'012345'};
   assert.equal((await post('/api/password/check',{username:'missing'})).status,404);
