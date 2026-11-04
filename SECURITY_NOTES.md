@@ -17,3 +17,11 @@
 - Legacy external links are restricted to HTTP(S) on the client before opening; HTML escaping alone does not reject javascript URLs.
 - Production Render access was blocked by the environment network policy. Live deployment, actual JSONBin permissions, TOTP configuration and production data have not been verified.
 - Remaining architectural risk: multiple processes writing the same JSONBin can overwrite concurrent changes. Use one writer and plan a transactional database for monetary operations. This review does not establish that all defects have been eliminated.
+
+## Request and purchase hardening (2026-11-04)
+- Reject non-object JSON bodies with HTTP 400; reject browser cross-site POST requests in addition to existing Origin, JSON content type and custom-header checks.
+- Limit POST requests to 120 per IP per minute, alongside endpoint-specific limits. This is a single-process application limit, not DDoS protection.
+- Validate stored coupon percentages and quantities at purchase time, and reject unsafe or negative final prices before changing the wallet.
+- Regression suite: `node --test tests/*.test.js` (4 tests passed). Added checks for private server/config paths, malformed request bodies, cross-site POSTs, invalid coupon balances, simultaneous purchases of one listing, and delivery credentials hidden from another customer. Concurrent purchase guarantees apply to one server process only.
+- F12/DevTools cannot reliably be disabled by a website. No keyboard or context-menu blocking is used as a security control; authorization and delivery filtering run on the server.
+- These local tests do not certify production security. Before accepting real payments, verify production credentials/access controls and backups, enable admin TOTP, and replace JSONBin with a transactional database for multiple writers. A reusable six-digit recovery code remains weaker than a higher-entropy or verified-channel recovery mechanism, even with rate limits.

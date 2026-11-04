@@ -4,7 +4,7 @@ const http=require('node:http');
 const {spawn}=require('node:child_process');
 const {once}=require('node:events');
 test('price updates preserve orders, enforce admin access and persist across restart',async()=>{
- let record={accs:[{id:'a',title:'Demo',price:50000,discount:0,link:'https://example.com',type:'normal'}],orders:[{id:'o',acc_id:'a',status:'pending',username:'buyer',price_paid:50000}],users:[{username:'gg_fixture',googleSub:'sub-fixture',googleEmail:'verified@gmail.com',displayName:'Google Person',balance:0}]};
+ let record={accs:[{id:'a',title:'Demo',price:50000,discount:0,link:'https://example.com',type:'normal'}],orders:[{id:'o',acc_id:'a',status:'pending',username:'buyer',price_paid:50000}],discounts:[{code:'BROKEN',percent:200,qty:5}],users:[{username:'gg_fixture',googleSub:'sub-fixture',googleEmail:'verified@gmail.com',displayName:'Google Person',balance:0}]};
  const bin=http.createServer(async(req,res)=>{
   if(req.method==='PUT'){let body='';for await(const chunk of req)body+=chunk;record=JSON.parse(body)}
   res.setHeader('Content-Type','application/json');res.end(JSON.stringify({record}));
@@ -23,6 +23,10 @@ test('price updates preserve orders, enforce admin access and persist across res
  const post=async(path,body,headers={})=>fetch('http://127.0.0.1:'+port+path,{method:'POST',headers:{'Content-Type':'application/json','X-BP-Request':'1',Cookie:cookie,...headers},body:JSON.stringify(body)});
  try{
   await start();
+  for(const body of [null,[],42])assert.equal((await post('/api/login',body)).status,400);
+  assert.equal((await post('/api/login',{}, {'Sec-Fetch-Site':'cross-site'})).status,403);
+  for(const path of ['/.env','/server.js','/google-auth.js','/delivery.js','/.git/config'])assert.equal((await fetch('http://127.0.0.1:'+port+path)).status,404);
+
   assert.equal((await post('/api/admin/account/price',{id:'a',price:75000})).status,401);
   const crypto=require('node:crypto');
   const payload=Buffer.from(JSON.stringify({u:'gg_fixture',r:'user',j:'test',exp:Date.now()+60000})).toString('base64url');
@@ -78,13 +82,21 @@ test('price updates preserve orders, enforce admin access and persist across res
   const anonymous=await (await fetch('http://127.0.0.1:'+port+'/api/state')).text();
   assert.ok(!anonymous.includes('game-user'));assert.ok(!anonymous.includes('game-password'));
   cookie=customerCookie;
-  const purchase=await (await post('/api/order',{accId:product.id})).json();
+  assert.equal((await post('/api/order',{accId:product.id,code:'BROKEN'})).status,400);
+  assert.equal(record.users.find(u=>u.username==='customer').balance,100);
+  const simultaneous=await Promise.all([post('/api/order',{accId:product.id}),post('/api/order',{accId:product.id})]);
+  assert.deepEqual(simultaneous.map(r=>r.status).sort(),[200,400]);
+  const purchase=await simultaneous.find(r=>r.status===200).json();
+  assert.equal(record.users.find(u=>u.username==='customer').balance,0);
+  assert.equal(record.orders.filter(o=>o.acc_id===product.id).length,1);
   const getState=async()=> (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:cookie}})).json();
   assert.equal((await getState()).mine.orders[0].credentials,null);
   cookie=adminCookie;
   assert.equal((await post('/api/admin/order/approve',{id:purchase.orderId})).status,200);
   cookie=customerCookie;
   assert.deepEqual((await getState()).mine.orders[0].credentials,{username:'game-user',password:'game-password'});
+  const otherUser=await (await fetch('http://127.0.0.1:'+port+'/api/state',{headers:{Cookie:'bp_session='+payload+'.'+signature}})).text();
+  assert.ok(!otherUser.includes('game-password'));assert.ok(!otherUser.includes('game-user'));
   cookie=adminCookie;
   assert.equal((await post('/api/admin/account/update',{id:product.id,title:'Changed',price:100,accountUsername:'bad',accountPassword:'bad'})).status,400);
   assert.equal((await fetch('http://127.0.0.1:'+port+'/api/auth/google',{redirect:'manual'})).status,503);
