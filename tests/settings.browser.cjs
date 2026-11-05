@@ -30,7 +30,7 @@ const assert=require('node:assert/strict');
  await page.locator('[data-support-close]').click();
  await page.locator('#openSettings').click();
  await page.locator('#settingsDialog[open]').waitFor();
- for(const theme of ['ocean','rose','sunset','light','aurora','emerald','ruby','graphite','lavender','bronze']){
+ for(const theme of ['ocean','rose','sunset','light','aurora','emerald','ruby','graphite','lavender','bronze','black','purple']){
   await page.locator('[name=theme]').selectOption(theme);
   assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
  }
