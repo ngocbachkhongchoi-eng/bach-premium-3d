@@ -4,6 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const zlib = require('node:zlib');
 const { URL } = require('node:url');
 const net = require('node:net');
 const ROOT = __dirname;
@@ -62,8 +63,31 @@ function cookieHeader(token,req){const isHttps=process.env.NODE_ENV==='productio
 function respond(res,status,data,extra={}){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer',...securityHeaders(),...extra});res.end(JSON.stringify(data));}
 const fail=(res,status,msg)=>respond(res,status,{error:msg});
 const BIN_URL=(process.env.NODE_ENV==='test' && process.env.TEST_JSONBIN_URL)?process.env.TEST_JSONBIN_URL:'https://api.jsonbin.io/v3/b/'+encodeURIComponent(BIN);
-async function fetchDB(){const r=await fetch(BIN_URL+'/latest',{headers:jsonHeaders,signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error('JSONBin GET '+r.status+' (kiem tra Bin ID va quyen Read cua Access Key)');const j=await r.json();if(!j.record||typeof j.record!=='object')throw new Error('JSONBin record rỗng');const d={...empty(),...j.record};for(const k of Object.keys(empty()))if(k!=='security'&&!Array.isArray(d[k]))d[k]=[];if(!d.security||typeof d.security!=='object'||Array.isArray(d.security))d.security={loginIps:{},revoked:[]};if(!d.security.loginIps||typeof d.security.loginIps!=='object'||Array.isArray(d.security.loginIps))d.security.loginIps={};if(!Array.isArray(d.security.revoked))d.security.revoked=[];let migrated=false;for(const u of d.users){if(!u.passwordHash&&typeof u.password==='string'){u.passwordHash=hashPass(u.password);migrated=true;}if('password' in u){delete u.password;migrated=true;}const balance=balanceOf(u);if(balance!==null&&u.balance!==balance){u.balance=balance;migrated=true;}else if(balance===null)console.warn('Khách '+clean(u.username,40)+' có số dư không hợp lệ; cần ADMIN kiểm tra, KHÔNG tự đặt thành 0.');}return {data:d,migrated};}
-async function pushDB(next){const r=await fetch(BIN_URL,{method:'PUT',headers:jsonHeaders,body:JSON.stringify(next),signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error('JSONBin PUT '+r.status+' (kiem tra quyen Update cua Access Key)');}
+
+const JSONBIN_SAFE_LIMIT = 95000;
+// Gzip reduces stored bytes, never the provider's storage or API quota.
+function unpackRecord(record){
+ if(!record||typeof record!=='object'||Array.isArray(record))throw Error('JSONBin record không hợp lệ');
+ if(!('__bpPacked' in record))return record;
+ if(record.__bpPacked!=='gzip-base64-v1'||typeof record.data!=='string')throw Error('JSONBin chứa bản ghi nén không hỗ trợ. Không ghi đè dữ liệu.');
+ const plain=zlib.gunzipSync(Buffer.from(record.data,'base64'),{maxOutputLength:5*1024*1024});
+ const value=JSON.parse(plain.toString('utf8'));
+ if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Bản ghi nén không hợp lệ');
+ return value;
+}
+function encodeRecord(value){
+ const raw=JSON.stringify(value),rawBytes=Buffer.byteLength(raw,'utf8');
+ if(rawBytes<78000)return raw;
+ const packed=JSON.stringify({__bpPacked:'gzip-base64-v1',data:zlib.gzipSync(Buffer.from(raw,'utf8'),{level:9}).toString('base64')});
+ const packedBytes=Buffer.byteLength(packed,'utf8');
+ if(packedBytes<rawBytes&&packedBytes<=JSONBIN_SAFE_LIMIT)return packed;
+ if(rawBytes<=JSONBIN_SAFE_LIMIT)return raw;
+ const err=Error('Dữ liệu vẫn vượt giới hạn JSONBin sau khi nén. Hãy dùng link HTTPS ngoài cho ảnh/tệp hoặc chuyển sang cơ sở dữ liệu lớn hơn. Dữ liệu cũ được giữ nguyên.');
+ err.status=507;throw err;
+}
+
+async function fetchDB(){const r=await fetch(BIN_URL+'/latest',{headers:jsonHeaders,signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error('JSONBin GET '+r.status+' (kiem tra Bin ID va quyen Read cua Access Key)');const j=await r.json();if(!j.record||typeof j.record!=='object')throw new Error('JSONBin record rỗng');const d={...empty(),...unpackRecord(j.record)};for(const k of Object.keys(empty()))if(k!=='security'&&!Array.isArray(d[k]))d[k]=[];if(!d.security||typeof d.security!=='object'||Array.isArray(d.security))d.security={loginIps:{},revoked:[]};if(!d.security.loginIps||typeof d.security.loginIps!=='object'||Array.isArray(d.security.loginIps))d.security.loginIps={};if(!Array.isArray(d.security.revoked))d.security.revoked=[];let migrated=false;for(const u of d.users){if(!u.passwordHash&&typeof u.password==='string'){u.passwordHash=hashPass(u.password);migrated=true;}if('password' in u){delete u.password;migrated=true;}const balance=balanceOf(u);if(balance!==null&&u.balance!==balance){u.balance=balance;migrated=true;}else if(balance===null)console.warn('Khách '+clean(u.username,40)+' có số dư không hợp lệ; cần ADMIN kiểm tra, KHÔNG tự đặt thành 0.');}return {data:d,migrated};}
+async function pushDB(next){const r=await fetch(BIN_URL,{method:'PUT',headers:jsonHeaders,body:encodeRecord(next),signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error('JSONBin PUT '+r.status+' (kiem tra quyen Update cua Access Key)');}
 async function bootstrap(){const {data,migrated}=await fetchDB();if(migrated){await pushDB(data);console.log('Đã chuẩn hóa mật khẩu/số dư hợp lệ từ dữ liệu cũ.');}db=data;const missing=data.accs.filter(a=>(accountPrice(a)??0)<=0);if(missing.length)console.warn('CẢNH BÁO: '+missing.length+' sản phẩm chưa có giá bán hợp lệ. ADMIN cần vào Sản phẩm → Sửa sản phẩm để điền lại giá. Không tự đoán giá cũ.');}
 function mutate(fn){const task=serialize.then(async()=>{const updated=structuredClone(db);const result=await fn(updated);if(result&&(result.error||result._skipSave))return result;await pushDB(updated);db=updated;return result;});serialize=task.catch(e=>{console.error('DB write error',e.message)});return task;}
 function productAvailability(a,source=db){
@@ -72,6 +96,14 @@ function productAvailability(a,source=db){
 }
 function attachmentInput(value){
  if(value===undefined||value===null)return null;
+ if(value&&typeof value.url==='string'){
+  const url=validateUrl(value.url);if(!url||!url.startsWith('https://'))throw Error('Link tệp phải là HTTPS');
+  const parsed=new URL(url);let basename='tep-ngoai';try{basename=decodeURIComponent(parsed.pathname.split('/').pop()||basename)}catch{}
+  const name=clean(value.name||basename,100).replace(/[^\p{L}\p{N}_. -]/gu,'_')||'tep-ngoai';
+  const ext=parsed.pathname.toLowerCase().split('.').pop();
+  const type=({jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp'})[ext]||'application/octet-stream';
+  return {name,type,url};
+ }
  if(!value||typeof value.name!=='string'||typeof value.data!=='string'||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))throw Error('Tệp không hợp lệ');
  const bytes=Buffer.from(value.data,'base64');
  if(!bytes.length||bytes.length>32768)throw Error('Tệp tối đa 32 KB; ảnh sẽ được thu nhỏ tự động');
@@ -199,9 +231,17 @@ if(pathname.startsWith('/api/attachment/')&&method==='GET'){
  const item=list.find(x=>String(x.id)===itemId),file=item?.attachment;
  if(!file)return fail(res,404,'Không tìm thấy tệp');
  if(kind==='free'&&!['image/jpeg','image/png','image/webp'].includes(file.type)&&!requireRole(res,auth(req)))return;
+ if(file.url){const safe=validateUrl(file.url);if(!safe||!safe.startsWith('https://'))return fail(res,404,'Link ngoài không hợp lệ');res.writeHead(302,{...securityHeaders(),'Cache-Control':'no-store',Location:safe});return res.end();}
  const bytes=Buffer.from(file.data,'base64');
  res.writeHead(200,{...securityHeaders(),'Content-Type':file.type,'Content-Length':bytes.length,'Cache-Control':'no-store','Content-Disposition':(file.type.startsWith('image/')?'inline':'attachment')+"; filename*=UTF-8''"+encodeURIComponent(file.name)});
  return res.end(bytes);
+}
+if(pathname==='/api/admin/storage'&&method==='GET'){
+ const session=auth(req);if(!requireRole(res,session,'admin'))return;
+ const rawBytes=Buffer.byteLength(JSON.stringify(db),'utf8');let estimate=null,packed=false;
+ try{const x=encodeRecord(db);estimate=Buffer.byteLength(x,'utf8');packed=x.includes('"__bpPacked"')}catch{}
+ const embedded=[...db.accs,...db.freebies,...db.notifs].filter(x=>x.attachment&&typeof x.attachment.data==='string');
+ return respond(res,200,{rawBytes,estimatedStoredBytes:estimate,packed,maxRecommendedBytes:JSONBIN_SAFE_LIMIT,embeddedFiles:embedded.length,embeddedFileBytes:embedded.reduce((t,x)=>t+Buffer.byteLength(x.attachment.data,'utf8'),0)});
 }
 if(pathname==='/api/state'&&method==='GET'){const s=auth(req);return respond(res,200,{profile:profile(s),...publicData(),...privateData(s)});}
 if(!pathname.startsWith('/api/'))return staticFile(pathname,res);
@@ -341,7 +381,7 @@ if(pathname.startsWith('/api/admin/')&&method==='POST'){
  case 'vip/gift':{const u=d.users.find(x=>x.username===clean(b.username,40));if(!u)return {error:'Không tìm thấy khách'};u.vip=true;break;}
  default:return {error:'Chức năng không tồn tại'};
  }
- if(attachment&&Buffer.byteLength(JSON.stringify(d))>90000)return {error:'Kho JSONBin đã gần đầy. Hãy dùng đường dẫn tệp bên ngoài hoặc xóa nội dung không cần thiết trước khi tải thêm.'};
+ // The storage limit is checked in pushDB; never silently delete orders or files.
  d.logs.push({id:id(),at:now(),action,by:ADMIN_USER});return {ok:true};
  });return result.error?fail(res,400,result.error):respond(res,200,result);
 }
@@ -363,11 +403,11 @@ function securityHeaders(){
   'Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=()',
   'Cross-Origin-Opener-Policy':'same-origin',
   'Cross-Origin-Resource-Policy':'same-origin',
-  'Content-Security-Policy':"default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  'Content-Security-Policy':"default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self'; img-src 'self' data: https:; connect-src 'self'; frame-src https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
  };
  if(process.env.NODE_ENV==='production')h['Strict-Transport-Security']='max-age=31536000; includeSubDomains';
  return h;
 }
-const server=http.createServer(async(req,res)=>{try{await route(req,res)}catch(e){if(e.status===400){if(!res.headersSent)fail(res,400,'Dữ liệu JSON không hợp lệ');return}console.error(e.stack||e);if(!res.headersSent)fail(res,503,'Máy chủ hoặc JSONBin đang gặp lỗi. Hãy thử lại.') }});
+const server=http.createServer(async(req,res)=>{try{await route(req,res)}catch(e){if(e.status===400){if(!res.headersSent)fail(res,400,'Dữ liệu JSON không hợp lệ');return}if(e.status===507){if(!res.headersSent)fail(res,507,e.message);return}console.error(e.stack||e);if(!res.headersSent)fail(res,503,'Máy chủ hoặc JSONBin đang gặp lỗi. Hãy thử lại.') }});
 server.requestTimeout=15000;server.headersTimeout=12000;server.keepAliveTimeout=5000;
 bootstrap().then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`BÁCH PREMIUM: http://localhost:${PORT}`))).catch(e=>{console.error('Không kết nối được JSONBin:',e.message);process.exit(1)});
